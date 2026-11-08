@@ -1,0 +1,617 @@
+% Lab 3 of Intelligent Robotics (ASY2): a linear Kalman filter that finds a driving robot from GPS and odometry.
+% Build: make  (latexmk -pdf). Figures are TikZ files in figures/, made by tools/make_figures.py.
+\documentclass[11pt,a4paper,parskip=half]{scrartcl}
+\usepackage[english]{babel}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[sfdefault,lining]{FiraSans}
+\usepackage[scale=0.88]{FiraMono}
+\usepackage[a4paper,left=2.4cm,right=2.4cm,top=2.6cm,bottom=2.6cm,headsep=0.8cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,array,tabularx}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,calc,shapes.geometric}
+\usepackage[skins,breakable]{tcolorbox}
+\usepackage{fontawesome5}
+\usepackage[font=small,labelfont={bf,color=ohmred},skip=4pt]{caption}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[headsepline=0.4pt]{scrlayer-scrpage}
+\usepackage[colorlinks=true,linkcolor=ohmred,urlcolor=ohmred]{hyperref}
+\usepackage{cleveref}
+
+% ---------------------------------------------------------------- colours and headings
+\definecolor{ohmred}{HTML}{C8372D}
+\definecolor{ohmgreen}{HTML}{2E8B57}
+\definecolor{ohmamber}{HTML}{D98E04}
+\definecolor{ohmgrey}{HTML}{5A5A5A}
+\addtokomafont{disposition}{\color{ohmred}}
+\addtokomafont{section}{\Large}
+\addtokomafont{subsection}{\large}
+\setkomafont{pageheadfoot}{\small\color{ohmgrey}}
+\setkomafont{pagenumber}{\small\bfseries\color{ohmred}}
+\clearpairofpagestyles
+\ihead{Intelligent Robotics (ASY2) · Lab 3}
+\ohead{Kalman filter}
+\ofoot{\pagemark}
+\pagestyle{scrheadings}
+
+\lstset{basicstyle=\ttfamily\small, columns=fullflexible, keepspaces=true,
+        showstringspaces=false, breaklines=true, frame=none, backgroundcolor=\color{black!5},
+        xleftmargin=8pt, xrightmargin=8pt, framexleftmargin=6pt, framexrightmargin=6pt,
+        aboveskip=4pt, belowskip=4pt}
+
+\newcommand{\thema}[1]{\texttt{#1}}
+\newcommand{\datei}[1]{\texttt{#1}}
+\newcommand{\minutes}[1]{\hfill{\normalsize\mdseries\color{ohmgrey}\faClock[regular]~#1 min}}
+\newcommand{\mat}[1]{\mathbf{#1}}
+\newcommand{\T}{^{\mathsf{T}}}
+
+% ---------------------------------------------------------------- boxes
+\tcbset{base/.style={enhanced, breakable, boxrule=0pt, arc=1.5pt, left=8pt, right=8pt,
+        top=5pt, bottom=5pt, before skip=8pt, after skip=8pt}}
+% \begin{todo}{1.3}: the block STUDENT 1.3, with its hint command at the end of the last line
+\newcommand{\hintcmd}[1]{\unskip\nobreak\hfil\penalty50\hskip1em\null\nobreak\hfil
+        \mbox{\small\color{ohmgrey}\faLightbulb[regular]~\texttt{python3 hint.py #1}}{\parfillskip=0pt\par}}
+\newtcolorbox{todo}[1]{base, colback=ohmred!5, borderline west={2.5pt}{0pt}{ohmred},
+        title={\faPen~STUDENT #1}, coltitle=ohmred, colbacktitle=ohmred!5, fonttitle=\bfseries,
+        attach title to upper={\quad}, after upper={\hintcmd{#1}}}
+\newtcolorbox{script}[1]{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faBook~Lecture script, #1}, coltitle=ohmgrey, colbacktitle=black!3,
+        fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
+\newtcolorbox{note}{base, colback=ohmamber!8, borderline west={2.5pt}{0pt}{ohmamber}}
+\newtcolorbox{checkpoint}{base, colback=ohmgreen!7, borderline west={2.5pt}{0pt}{ohmgreen},
+        title={\faCheckCircle[regular]~Checkpoint}, coltitle=ohmgreen, colbacktitle=ohmgreen!7,
+        fonttitle=\bfseries, attach title to upper={\quad}}
+
+% \running{<launch arguments>}{<node arguments>}: what terminals 1 and 2 run during a task
+\newcommand{\running}[2]{\begin{tcolorbox}[base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faTerminal~Running}, coltitle=ohmgrey, colbacktitle=black!3, fonttitle=\small\bfseries,
+        toptitle=2pt, bottomtitle=0pt, fontupper=\small]
+  \begin{tabularx}{\linewidth}{@{}>{\color{ohmgrey}}l >{\raggedright\arraybackslash}X@{}}
+    terminal 1 & \texttt{ros2 launch ohm\_kalman\_localization kalman.launch.py#1} \\
+    terminal 2 & \texttt{ros2 run ohm\_kalman\_localization kalman\_node.py -\kern0pt-ros-args #2}
+  \end{tabularx}
+\end{tcolorbox}}
+% \expected[<note>]{<name>}: the path (figures/run_<name>.tikz) and the monitor (figures/term_<name>.txt)
+\newtcolorbox{seebox}{base, colback=ohmgreen!3, borderline west={2.5pt}{0pt}{ohmgreen!60},
+        title={\faEye[regular]~What you should see}, coltitle=ohmgreen!80!black, colbacktitle=ohmgreen!3,
+        fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt, breakable=false}
+\newcommand{\expected}[2][]{\begin{seebox}
+  \centering\resizebox{0.5\linewidth}{!}{\input{figures/run_#2.tikz}}\par\smallskip
+  \raggedright{\footnotesize\color{ohmgrey}#1the last 70\,s: white the truth, green the fixes, red your
+    estimate and its \(1\sigma\) ellipse. Terminal 1, the monitor (the numbers change from lap to lap):}
+  \lstinputlisting[basicstyle=\ttfamily\scriptsize, aboveskip=2pt, belowskip=0pt, xleftmargin=4pt,
+                   framexleftmargin=3pt, breakindent=1.5em]{figures/term_#2.txt}
+\end{seebox}}
+
+\setlist[enumerate,1]{leftmargin=*,itemsep=3pt,topsep=2pt}
+\setlist[itemize,1]{leftmargin=*,itemsep=2pt,topsep=2pt}
+
+\begin{document}
+\sloppy
+
+% ---------------------------------------------------------------- title
+\begin{tcolorbox}[enhanced, colback=ohmred, colframe=ohmred, arc=0pt, left=14pt, right=14pt,
+                  top=12pt, bottom=12pt, fontupper=\color{white}]
+  {\small Intelligent Robotics (ASY2) · Lab 3}\\[6pt]
+  {\LARGE\bfseries Kalman filter}\\[4pt]
+  {\large Where is the robot? GPS and odometry, fused}
+\end{tcolorbox}
+
+\noindent
+\begin{tabular}{@{}>{\color{ohmgrey}}l l@{\hspace{2.4em}}>{\color{ohmgrey}}l l@{}}
+  \faClock[regular]~Duration & 180 minutes & \faUsers~Work in & pairs \\
+  \faBook~Script & Cycle 3, section 3.1 & \faFolderOpen[regular]~Files & \datei{ohm-kalman-localization/student/}
+\end{tabular}
+
+\section{Overview}
+A robot drives a loop on an open field, lap after lap (\cref{fig:field}). You do not steer it: a driver node
+does. Your node has to find out where the robot is. It has two sensors:
+\begin{itemize}
+  \item \textbf{GPS}: five fixes per second. Each fix scatters by \(\sigma = 0.5\)\,m in \(x\) and in \(y\).
+        It does not drift. In the tunnel there is no fix.
+  \item \textbf{Odometry}: 50 messages per second from the wheels. Its velocity is good. Its position drifts,
+        because the wheel constants are a little wrong.
+\end{itemize}
+You write a Kalman filter that combines a motion model with these measurements:
+\begin{itemize}
+  \item \textbf{Task 1}: GPS alone, with a constant-velocity model.
+  \item \textbf{Task 2}: GPS and the velocity of the odometry. Then the tunnel.
+\end{itemize}
+
+\paragraph{Why a linear filter is enough.} The state is \(\vec x = (x, y, v_x, v_y)\T\) in the world frame.
+The constant-velocity model is linear. The GPS measures \(x\) and \(y\): linear. The odometry measures the
+velocity in the frame of the robot; rotated into the world frame with the heading of the odometry, it is
+\(v_x\) and \(v_y\): linear again. So the plain Kalman filter of the script applies. The heading itself is not
+estimated, it is taken from the odometry. Estimating it as well makes the model non-linear: that is the EKF
+(\cref{sec:outlook}).
+
+\begin{figure}[ht]
+  \centering
+  \input{figures/field.tikz}
+  \caption{The hall \thema{open} from above, 30\,m \(\times\) 20\,m. The robot drives the red loop
+    counter-clockwise at 0.5\,m/s, about 70\,s per lap. Every lap it brakes, stands for 4\,s at the stop and
+    starts again. Grey: the tunnel (\thema{gps:=tunnel}). Amber: a glass front that reflects the GPS signal
+    (\thema{gps:=multipath}, extra task).}
+  \label{fig:field}
+\end{figure}
+
+\begin{table}[ht]\centering
+\caption{Schedule.}
+\label{tab:schedule}
+\begin{tabular}{@{}rll@{}}
+\toprule
+min & task & done when \\
+\midrule
+0--15 & \cref{sec:task0} The sensors & \cref{tab:sensors} is filled in \\
+15--55 & \cref{sec:task1} GPS alone: the filter & \thema{pytest -k task1} passes \\
+55--70 & \cref{sec:task1b} GPS alone: in the loop & the red path follows the robot \\
+70--100 & \cref{sec:task1c} GPS alone: the process noise & \cref{tab:q} is filled in \\
+100--110 & break & \\
+110--145 & \cref{sec:task2} GPS and odometry & \cref{tab:sigmav} is filled in \\
+145--170 & \cref{sec:task2b} The tunnel & \cref{tab:tunnel} is filled in \\
+170--180 & \cref{sec:extra} Extra task: multipath & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Notation} as in the script. In the code the names are short:
+\begin{center}\small
+\begin{tabular}{@{}lll@{}}
+\toprule
+script & code & \\
+\midrule
+\(\tilde{\vec x}_n\), \(\tilde{\vec x}_n^+\) & \thema{self.x} & state before and after the correction \\
+\(\tilde{\mat P}_n\), \(\tilde{\mat P}_n^+\) & \thema{self.P} & its covariance, \(4 \times 4\) \\
+\(\mat A\), \(\mat Q\) & \thema{A}, \thema{Q} & model and process noise of one step of \(\Delta t\) = \thema{dt} seconds \\
+\(\hat{\vec y}_n\) & \thema{z} & the measurement \\
+\(\hat{\vec y}_n - \tilde{\vec y}_n\) & \thema{innovation} & measured minus predicted measurement \\
+\(\mat H\), \(\mat R\), \(\mat K_n\) & \thema{H}, \thema{R}, \thema{K} & observation matrix, measurement noise, gain \\
+\bottomrule
+\end{tabular}
+\end{center}
+Everything is in metres and seconds, in the world frame \thema{map}.
+
+\newpage
+\section{Getting started}
+\paragraph{Your own copy.} Fork \datei{ohm-kalman-localization} on GitHub (button \emph{Fork} at the top
+right), then clone your fork into the \datei{src/} folder of your workspace. Update the simulator:
+\begin{lstlisting}
+git clone git@github.com:<your-name>/ohm-kalman-localization.git
+\end{lstlisting}
+\begin{lstlisting}
+git -C ir-mecanum-lab pull
+\end{lstlisting}
+Commit after every task and push, so nothing is lost at the end of the session.
+
+\paragraph{Build.} Build once, then source the workspace in every new terminal:
+\begin{lstlisting}
+colcon build --symlink-install --packages-select mecanum_lab_interfaces mecanum_lab ohm_kalman_localization
+\end{lstlisting}
+\begin{lstlisting}
+source install/setup.bash
+\end{lstlisting}
+You do not need to build again after a change to your code. Just start the node again.
+
+\paragraph{Simulator.} One launch file starts the simulator in the hall \thema{open}, the driver, the
+monitor and RViz. The robot starts to drive at once.
+\begin{lstlisting}
+ros2 launch ohm_kalman_localization kalman.launch.py
+\end{lstlisting}
+The driver steers by the exact pose on \thema{/muster/truth}. Your filter never reads \thema{/truth}: it
+has to find the robot from GPS and odometry alone. The monitor compares your estimate with the truth.
+
+\paragraph{Your files.} \datei{student/kalman\_filter.py} (prediction and correction) and
+\datei{student/models.py} (the model and the two sensors). You write only the few lines in the middle, marked
+\begin{lstlisting}
+# the state through the model (no input B u here), then the covariance through the model plus Q
+# TODO STUDENT 1.2
+raise NotImplementedError("STUDENT 1.2")
+\end{lstlisting}
+The comment above it says in words what goes there; the equation is in the task of this handout. Replace the
+\thema{raise} line by your code.
+
+\begin{note}
+\textbf{numpy} for the matrices, as in Matlab: \thema{np.array([[1, 2], [3, 4]])} is a matrix, row by row;
+\thema{A @ B} the matrix product (\thema{A * B} multiplies element by element: not what you want);
+\thema{A.T} the transpose; \thema{np.linalg.inv(S)} the inverse; \thema{np.eye(4)} the identity;
+\thema{np.diag([a, b])} a diagonal matrix; \thema{P[0, 2]} row 0, column 2.
+\end{note}
+
+\paragraph{The node.} \datei{student/kalman\_node.py} is given. It subscribes to the sensors, calls your
+functions and publishes the estimate. The parameter \thema{task} says which sensors it uses. It runs in a
+second terminal:
+\begin{lstlisting}
+ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1
+\end{lstlisting}
+If a function is not written yet, the node stops with \thema{NotImplementedError: STUDENT 1.1}: that is the
+next one to write.
+
+\paragraph{Self check.} The tests try your functions on made-up numbers, one task at a time:
+\begin{lstlisting}
+python3 -m pytest test/test_filter.py -q -k task1
+\end{lstlisting}
+
+\paragraph{Three terminals.} All of them in the workspace, sourced.
+\begin{center}\small
+\begin{tabular}{@{}>{\color{ohmgrey}}l l l@{}}
+  terminal 1 & simulator, driver, monitor, RViz & the monitor prints here every 10\,s \\
+  terminal 2 & your node           & Ctrl-C and start again after every change \\
+  terminal 3 & tests, hints, plots, \thema{ros2 topic} & \\
+\end{tabular}
+\end{center}
+Every task starts with a box \emph{Running}: what terminals 1 and 2 run. It ends with \emph{What you
+should see}: the last 70\,s of the path and the monitor when the task is done. RViz uses the same colours:
+white the true path, green the GPS fixes, red your estimate with its \(1\sigma\) ellipse.
+
+\paragraph{The monitor and the plots.} Every 10\,s the monitor prints, over the last 30\,s, the error (RMSE) of
+the GPS and of your filter against the truth, the largest error, the \(\sigma\) your filter claims, and the NEES
+(\cref{sec:task1c}).
+Each start of your node is a new run: the monitor writes it to \datei{runs/}. The last run as plots, like the
+plots of the Octave tutorial (path, velocity, diagonal of \(\mat P\) over time):
+\begin{lstlisting}
+ros2 run ohm_kalman_localization plot_run.py
+\end{lstlisting}
+
+\paragraph{Hints.} Stuck? Every block has three hints: the idea, how to write it in Python, and at last
+the code. Each call opens the next one, in the folder \datei{ohm-kalman-localization}:
+\begin{lstlisting}
+python3 hint.py 1.3
+\end{lstlisting}
+\thema{python3 hint.py} alone shows the hints you have opened. Try on your own first: the hints notice
+when you ask too early.
+
+\begin{figure}[!hb]
+  \centering
+  \resizebox{\linewidth}{!}{\input{figures/nodegraph.tikz}}
+  \caption{The nodes and topics of the lab. Red: your node. Grey: given.}
+  \label{fig:nodes}
+\end{figure}
+
+\clearpage
+\section{Task 0: the sensors\minutes{15}}
+\label{sec:task0}
+\running{}{(nothing yet)}
+
+Before you filter, look at what you get. In terminal 3:
+\begin{lstlisting}
+ros2 topic list
+\end{lstlisting}
+\begin{lstlisting}
+ros2 topic hz /muster/gps_cov
+\end{lstlisting}
+\begin{lstlisting}
+ros2 topic echo --once /muster/gps_cov
+\end{lstlisting}
+\begin{lstlisting}
+ros2 interface show geometry_msgs/msg/PoseWithCovarianceStamped
+\end{lstlisting}
+Do the same for \thema{/muster/odom} (type \thema{nav\_msgs/msg/Odometry}). Fill in \cref{tab:sensors}.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.5}
+\caption{The two sensors. Fill in.}
+\label{tab:sensors}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.0cm}p{3.6cm}p{3.6cm}@{}}
+\toprule
+& \thema{/muster/gps\_cov} & \thema{/muster/odom} \\
+\midrule
+message type & & \\
+messages per second & & \\
+frame of the position (\thema{header.frame\_id}) & & \\
+frame of the velocity (\thema{child\_frame\_id}) & --- & \\
+\(\sigma\) of the GPS position, from \thema{covariance} & & --- \\
+speed while the robot stands at the stop & --- & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item The covariance of the GPS fix is a list of 36 numbers. Which of them is the variance of \(x\), which
+        the variance of \(y\)? You need them in \cref{sec:task1b}.
+  \item The simulator window shows the GPS fixes (key \thema{g}). Press \thema{o}: now it also shows the robot
+        as the odometry sees it. Watch both for a lap. Which one scatters, which one drifts?
+\end{itemize}
+
+\begin{checkpoint}
+\(\sigma\) of the GPS is 0.5\,m. The odometry gives the velocity in the frame of the robot, not in the world.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: GPS alone, the filter\minutes{40}}
+\label{sec:task1}
+\running{}{(nothing yet, the tests first)}
+
+First the filter itself, without ROS. In the Octave tutorial this was the loop of
+\datei{kalman\_intro\_template.m}; now it is a class with two methods, \thema{predict} and \thema{correct}, and the same equations for every sensor.
+
+\begin{script}{section 3.1, prediction and correction}
+Prediction from step \(n-1\) to step \(n\), here without a known input (\(\mat B \hat{\vec u}_n = 0\)):
+\begin{equation}
+  \tilde{\vec x}_n = \mat A\,\tilde{\vec x}_{n-1}^+ ,
+  \qquad
+  \tilde{\mat P}_n = \mat A\,\tilde{\mat P}_{n-1}^+\,\mat A\T + \mat Q .
+  \tag{3.6, 3.8}
+\end{equation}
+Correction with the measurement \(\hat{\vec y}_n\) and the predicted measurement
+\(\tilde{\vec y}_n = \mat H\,\tilde{\vec x}_n\) (3.7):
+\begin{align}
+  \mat K_n &= \tilde{\mat P}_n \mat H\T \big(\mat H\,\tilde{\mat P}_n \mat H\T + \mat R\big)^{-1} ,
+  \tag{3.10}\\
+  \tilde{\vec x}_n^+ &= \tilde{\vec x}_n + \mat K_n \big(\hat{\vec y}_n - \tilde{\vec y}_n\big) ,
+  \tag{3.11}\\
+  \tilde{\mat P}_n^+ &= \big(\mat I - \mat K_n \mat H\big)\,\tilde{\mat P}_n .
+  \tag{3.12}
+\end{align}
+The constant-velocity model of the worked example, here with a step of \(\Delta t\) seconds:
+\begin{equation}
+  \begin{pmatrix} x\\ y\\ v_x\\ v_y \end{pmatrix}_n =
+  \underbrace{\begin{pmatrix} 1&0&\Delta t&0\\ 0&1&0&\Delta t\\ 0&0&1&0\\ 0&0&0&1 \end{pmatrix}}_{\mat A}
+  \begin{pmatrix} x\\ y\\ v_x\\ v_y \end{pmatrix}_{n-1} .
+  \tag{3.13}
+\end{equation}
+\end{script}
+
+\begin{todo}{1.1}
+\datei{models.py}, \thema{cv\_model(dt)}: \(\mat A\) of (3.13) as a \(4 \times 4\) numpy array.
+Check: \thema{cv\_model(0.5) @ [0, 0, 2, 4]} is \thema{[1, 2, 2, 4]}.
+\end{todo}
+
+\begin{todo}{1.2}
+\datei{kalman\_filter.py}, \thema{predict(A, Q)}: the state and the covariance with (3.6, 3.8).
+\end{todo}
+
+\begin{todo}{1.3}
+\thema{correct(z, H, R)}: the gain \(\mat K\) with (3.10). The innovation and its covariance
+\(\mat S = \mat H \tilde{\mat P} \mat H\T + \mat R\), the bracket of (3.10), are already computed.
+\end{todo}
+
+\begin{todo}{1.4}
+\thema{correct}: the new state (3.11) and the new covariance (3.12).
+\end{todo}
+
+\(\mat Q\) is given: \thema{process\_noise(dt, sigma\_a)} in \datei{models.py}, more in \cref{sec:task1c}.
+
+
+\thema{pytest -k task1} also tries two examples of the script: the covariance ellipse (\(\tilde{\mat P} =
+\big(\begin{smallmatrix}2.56 & 1.2\\ 1.2 & 1.0\end{smallmatrix}\big)\), only \(x\) measured with
+\(\sigma = 0.6\), gives \(\mat K = (0.877,\ 0.411)\T\)), and the worked example (after 100 fixes the velocity is
+\((1,\ 0.5)\)). Test 1.5 fails until \cref{sec:task1b}.
+
+\begin{checkpoint}
+\thema{pytest -k "task1 and not 5"} passes. Why does a measurement of \(x\) alone change the estimate of
+\(v_x\)? Look at \(\tilde{\mat P}\) before the correction.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: GPS alone, in the loop\minutes{15}}
+\label{sec:task1b}
+\running{}{-p task:=1}
+
+The node needs \(\hat{\vec y}\), \(\mat H\) and \(\mat R\) of every fix. The GPS measures the position, so
+\(\mat H\) picks \(x\) and \(y\) out of the state. \(\mat R\) comes with the message: the simulator puts the
+variances of the fix into its \thema{covariance}.
+
+\begin{todo}{1.5}
+\datei{models.py}, \thema{gps\_measurement(msg)}: \thema{z}, \thema{H} (\(2 \times 4\)) and \thema{R}
+(\(2 \times 2\)) of one fix. The covariance of the message is a \(6 \times 6\) matrix row by row, in the order
+\(x, y, z\), roll, pitch, yaw (\cref{tab:sensors}).
+\end{todo}
+
+Start your node. It starts at the first fix with the velocity 0 and \(\sigma_v = 1\)\,m/s. Then it predicts
+ten times per second and corrects with every fix. Every 5\,s it prints the state, \(\sigma\) and the gain
+\(K\) of \(x\).
+\begin{itemize}
+  \item Watch the red ellipse in RViz: it grows between two fixes and shrinks at every fix. The script says
+        \(\mat P\) \emph{breathes}.
+  \item How long does it take until the velocity in terminal 2 is about 0.5\,m/s?
+  \item \(K\) settles to a fixed value. Which one? What does it mean that it is not 1?
+\end{itemize}
+
+\expected[]{task1}
+
+\begin{checkpoint}
+\thema{pytest -k task1} passes. The filter is about two times better than the GPS, and the NEES is about 1.
+\end{checkpoint}
+
+\newpage
+\section{Task 1: GPS alone, the process noise\minutes{30}}
+\label{sec:task1c}
+\running{}{-p task:=1 -p sigma\_a:=0.0}
+
+\begin{note}
+Given in \datei{models.py}: \thema{process\_noise(dt, sigma\_a)}. The model says ``the velocity stays''. It does
+not: the robot brakes and turns. \(\mat Q\) says by how much the model may be wrong: an unknown acceleration with
+standard deviation \(\sigma_a\), constant over the step, moves the position by \(a\,\Delta t^2/2\) and the velocity
+by \(a\,\Delta t\). Per axis
+\(\mat Q = \sigma_a^2 \, \vec g \vec g\T\) with \(\vec g = (\Delta t^2/2,\ \Delta t)\T\).
+\(\sigma_a = 0\) is \(\mat Q = \mat 0\).
+\end{note}
+
+\(\sigma_a\) is the only number you tune in task 1. Run the node with each \(\sigma_a\) of \cref{tab:q}, for a
+full lap each (70\,s), and take the last line of the monitor. Ctrl-C, then start again with the next value.
+
+The monitor checks two things. The error: how far your estimate is from the truth. And the honesty: is the
+\(\sigma\) your filter claims as large as its error? The NEES (normalized estimation error squared) is
+\begin{equation*}
+  \text{NEES} = \tfrac12\,\vec e\T \mat P_{xy}^{-1}\,\vec e , \qquad \vec e = \text{estimate} - \text{truth},
+\end{equation*}
+averaged over the last 30\,s. About 1: \(\sigma\) is honest. Much larger than 1: the filter is sure of itself and
+wrong.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{GPS alone, five values of \(\sigma_a\). Fill in.}
+\label{tab:q}
+\begin{tabular}{@{}p{2.4cm}p{1.9cm}p{1.9cm}p{1.9cm}p{1.9cm}p{1.9cm}@{}}
+\toprule
+\(\sigma_a\) in m/s\(^2\) & GPS in m & filter in m & max in m & \(\sigma\) in m & NEES \\
+\midrule
+0 & & & & & \\
+0.1 & & & & & \\
+0.3 & & & & & \\
+1 & & & & & \\
+3 & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item \(\sigma_a = 0\) is \(\mat Q = \mat 0\), the first exercise of the script. What happens to \(K\) and
+        to \(\sigma\) after a few laps? And to the error at the corners and at the stop?
+        \thema{plot\_run.py} shows it in the velocity.
+  \item Which \(\sigma_a\) gives the smallest error? Which one gives NEES \(\approx 1\)? Compare with what the
+        robot does: it brakes and starts with 0.3\,m/s\(^2\), and in a corner (\(r = 1\)\,m) it accelerates
+        with \(v^2/r = 0.25\)\,m/s\(^2\) towards the centre.
+  \item \(\sigma_a = 3\): why is the error larger again, although \(\sigma\) is honest?
+\end{itemize}
+
+\expected[\(\sigma_a = 0\); ]{q0}
+
+\begin{checkpoint}
+Explain with your table: too small a \(\mat Q\) makes the filter confident and wrong, too large a \(\mat Q\) makes
+it honest and noisy. Show the plots of \(\sigma_a = 0\) and \(\sigma_a = 0.3\).
+\end{checkpoint}
+
+\newpage
+\section{Task 2: GPS and odometry\minutes{35}}
+\label{sec:task2}
+\running{}{-p task:=2}
+
+Now the node also subscribes to \thema{/muster/odom} and corrects with its velocity, 50 times per second. The
+state stays the same, and so do \thema{predict} and \thema{correct}: only \(\hat{\vec y}\), \(\mat H\) and
+\(\mat R\) are new. This is the second part of the Octave tutorial: more measurements, same filter.
+
+The odometry gives the velocity \((v_x^R, v_y^R)\) in the frame of the robot (\cref{tab:sensors}). The state
+holds it in the world frame. Rotate it with the heading \(\theta\) of the odometry, as in lab 1:
+\begin{equation*}
+  \begin{pmatrix} v_x \\ v_y \end{pmatrix} =
+  \begin{pmatrix} \cos\theta & -\sin\theta \\ \sin\theta & \cos\theta \end{pmatrix}
+  \begin{pmatrix} v_x^R \\ v_y^R \end{pmatrix} .
+\end{equation*}
+
+\begin{todo}{2.1}
+\datei{models.py}, \thema{odom\_measurement(msg, sigma\_v)}: \thema{z} the velocity in the world frame,
+\thema{H} (\(2 \times 4\)) picks \(v_x\) and \(v_y\) out of the state, \thema{R} \(= \sigma_v^2\,\mat I\).
+\(\theta\), \(v_x^R\) and \(v_y^R\) are already read from the message.
+\end{todo}
+
+Start the node with \thema{task:=2}. Then try the values of \(\sigma_v\) in \cref{tab:sigmav}, a lap each.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{GPS and odometry, \(\sigma_a = 0.3\)\,m/s\(^2\), four values of \(\sigma_v\). Fill in.}
+\label{tab:sigmav}
+\begin{tabular}{@{}p{2.4cm}p{2.4cm}p{2.4cm}p{2.4cm}p{2.4cm}@{}}
+\toprule
+\(\sigma_v\) in m/s & filter in m & max in m & \(\sigma\) in m & NEES \\
+\midrule
+0.01 & & & & \\
+0.05 & & & & \\
+0.2 & & & & \\
+0.5 & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item How much better than GPS alone (\cref{tab:q}, \(\sigma_a = 0.3\))? Compare the velocity in
+        \thema{plot\_run.py}.
+  \item The speed of the odometry scatters by about 0.001\,m/s (\cref{tab:sensors}). Yet \(\sigma_v = 0.01\) gives a
+        large NEES. The odometry thinks the robot is 3\,\% faster than it is: 0.015\,m/s, the same error in
+        every message. Why does the filter, which gets 50 such messages per second, become far too sure of
+        itself? What does that mean for choosing \(\mat R\)?
+\end{itemize}
+
+\expected[\(\sigma_v = 0.05\); ]{task2}
+
+\begin{checkpoint}
+\thema{pytest -k task2} passes. Name the \(\sigma_v\) you keep, and why.
+\end{checkpoint}
+
+\newpage
+\section{Task 2: the tunnel\minutes{25}}
+\label{sec:task2b}
+\running{ gps:=tunnel}{-p task:=1 \textrm{, then} -p task:=2 -p sigma\_v:=0.2}
+
+Stop terminal 1 and start it with \thema{gps:=tunnel}. The tunnel covers the upper left corner of the loop and
+the stop (\cref{fig:field}): about 18\,s without a fix. Every time the robot leaves the tunnel, the monitor prints
+the largest error and the largest \(\sigma\) inside.
+
+Run task 1 for two laps, then task 2 for two laps. Fill in \cref{tab:tunnel}.
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{Through the tunnel. Fill in.}
+\label{tab:tunnel}
+\begin{tabular}{@{}p{6.0cm}p{3.8cm}p{3.8cm}@{}}
+\toprule
+& task 1, GPS alone & task 2, with odometry \\
+\midrule
+largest error in the tunnel, lap 1 & & \\
+largest error in the tunnel, lap 2 & & \\
+largest \(\sigma\) in the tunnel & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item In the tunnel the filter only predicts. What does the constant-velocity model assume the robot does
+        there? What does the robot really do?
+  \item With \thema{plot\_run.py}: how does \(\sigma\) grow in the tunnel (grey band), with and without
+        odometry? Is it honest in both cases?
+  \item What happens at the first fix after the tunnel, with GPS alone? Why does this one fix move the
+        estimate so much more than the fixes before the tunnel?
+\end{itemize}
+
+\expected[task 1; ]{tunnel1}
+\expected[task 2; ]{tunnel2}
+
+\begin{checkpoint}
+Explain the difference in \cref{tab:tunnel} with the two models of the robot: what the filter knows without
+a measurement, in task 1 and in task 2.
+\end{checkpoint}
+
+\newpage
+\section{Extra task: multipath\minutes{10}}
+\label{sec:extra}
+\running{ gps:=multipath}{-p task:=2 -p sigma\_v:=0.2 -p gate:=9.21}
+
+\thema{gps:=multipath} adds a glass front on the right straight (\cref{fig:field}). It reflects the GPS signal:
+every fix there is 2\,m off. The filter believes these fixes and is pulled away. Run task 2 without the gate
+first and look at the monitor line \thema{multipath}.
+
+A fix this far off is unlikely. The innovation \(\vec\nu = \hat{\vec y} - \tilde{\vec y}\) has the covariance
+\(\mat S\) (the bracket of 3.10). Its squared Mahalanobis distance
+\begin{equation*}
+  d^2 = \vec\nu\T \mat S^{-1} \vec\nu
+\end{equation*}
+is larger than 9.21 for only one fix in a hundred, if the filter is right (\(\chi^2\) distribution, two degrees
+of freedom). With \thema{-p gate:=9.21} the node drops every fix above that.
+
+\begin{todo}{Z.1}
+\datei{kalman\_filter.py}, \thema{mahalanobis2(innovation, S)}: \(d^2\). \thema{correct} calls it only when
+the gate is on.
+\end{todo}
+
+\begin{itemize}
+  \item How many fixes does the gate drop per lap (terminal 2)? How large is the error at the glass front now?
+  \item Try the gate with task 1 (GPS alone). Why does it help much less there?
+  \item A gate is dangerous with a filter that is sure of itself and wrong. Try \thema{task:=1},
+        \thema{sigma\_a:=0}, \thema{gate:=9.21}. What happens, and why does the filter not recover?
+\end{itemize}
+
+\expected[with the gate; ]{gate}
+
+\section{Outlook: the heading}
+\label{sec:outlook}
+Your filter borrows the heading from the odometry and never questions it. If the odometry turned the robot by a
+few degrees too much, the filter would rotate every velocity wrong, and the GPS would have to pull it back all the
+time. The cure is to estimate the heading as well: \(\vec x = (x, y, \theta, v)\T\), with the odometry as the
+input of the model. That model has \(\cos\theta\) and \(\sin\theta\) in it: non-linear. The Extended Kalman filter
+(script, section 3.1.4) linearizes it at the current estimate. The equations stay the ones you wrote today.
+
+\end{document}

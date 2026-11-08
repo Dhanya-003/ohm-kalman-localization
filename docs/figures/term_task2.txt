@@ -1,0 +1,6 @@
+t  240.2 s | GPS 0.75 m | filter 0.18 m, max 0.25 m, 4.1x better | sigma 0.04 m | NEES 10.6
+t  250.2 s | GPS 0.77 m | filter 0.20 m, max 0.25 m, 3.9x better | sigma 0.04 m | NEES 12.3
+t  260.3 s | GPS 0.78 m | filter 0.19 m, max 0.25 m, 4.1x better | sigma 0.04 m | NEES 11.3
+t  270.3 s | GPS 0.74 m | filter 0.16 m, max 0.22 m, 4.8x better | sigma 0.04 m | NEES 7.7
+t  280.3 s | GPS 0.75 m | filter 0.15 m, max 0.21 m, 5.0x better | sigma 0.04 m | NEES 7.1
+t  290.3 s | GPS 0.72 m | filter 0.16 m, max 0.21 m, 4.5x better | sigma 0.04 m | NEES 8.1

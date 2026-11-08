@@ -1,0 +1,6 @@
+t  180.3 s | GPS 0.71 m | filter 0.36 m, max 0.79 m, 2.0x better | sigma 0.22 m | NEES 1.3
+t  190.3 s | GPS 0.74 m | filter 0.36 m, max 0.79 m, 2.0x better | sigma 0.22 m | NEES 1.3
+t  200.3 s | GPS 0.75 m | filter 0.45 m, max 1.65 m, 1.7x better | sigma 0.35 m | NEES 1.1
+t  210.3 s | GPS 0.75 m | filter 2.98 m, max 7.51 m, 0.3x better | sigma 1.24 m | NEES 0.9
+tunnel: 18.1 s inside, largest error 8.51 m, largest sigma 5.00 m
+t  220.3 s | GPS 0.73 m | filter 3.50 m, max 8.67 m, 0.2x better | sigma 1.48 m | NEES 1.2

@@ -1,0 +1,38 @@
+{
+  "_comment": [
+    "LAB 'Kalman filter': launch/kalman.launch.py gps:=tunnel.",
+    "",
+    "config/open.json, plus a tunnel over the upper left corner and the stop: no fix for 6.5 m of the loop and the 4 s the robot waits there.",
+    "Zones are rectangles [x0, y0, x1, y1] in hall metres (sensors.GpsSensor._zones);",
+    "block = no fix at all, bias_xy = added to every fix inside."
+  ],
+  "world": "open",
+  "gui_rate": 10,
+  "debug_truth": true,
+  "spawns": [
+    [12.0, 7.0, 0.0]
+  ],
+  "gps": {
+    "rate": 5.0,
+    "sigma_xy": 0.5,
+    "zones": [
+      {
+        "name": "tunnel",
+        "rect": [7.5, 9.0, 12.0, 14.5],
+        "block": true
+      }
+    ]
+  },
+  "odom": {
+    "geometry": {
+      "scale_xy": 1.03
+    }
+  },
+  "view": {
+    "layers": {
+      "gps": true,
+      "kf": true,
+      "zones": true
+    }
+  }
+}
