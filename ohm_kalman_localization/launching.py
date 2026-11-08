@@ -41,8 +41,12 @@ def rviz_config(robot: str) -> str:
 
 
 def given_node(name: str, robot: str, *parameters: str) -> ExecuteProcess:
-    """One of nodes/*.py, started with the Python of this launch, from the checkout or the install."""
-    command = [sys.executable, paths.lab_file("nodes", name), "--ros-args", "-p", f"robot:={robot}"]
+    """One of nodes/*.py: from the checkout, or from lib/ of the install (colcon build without --symlink-install)."""
+    path = paths.lab_file("nodes", name)
+    if not os.path.isfile(path):
+        from ament_index_python.packages import get_package_prefix
+        path = os.path.join(get_package_prefix(paths.PACKAGE), "lib", paths.PACKAGE, name)
+    command = [sys.executable, path, "--ros-args", "-p", f"robot:={robot}"]
     for parameter in parameters:
         command += ["-p", parameter]
     return ExecuteProcess(cmd=command, name=name[:-3], output="screen", emulate_tty=True)
