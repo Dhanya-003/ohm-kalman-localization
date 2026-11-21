@@ -20,7 +20,7 @@ from . import paths
 
 ARGS = [
     ("robot", "muster", "robot name"),
-    ("gps", "open", "GPS: open (everywhere) | tunnel (no fix on the upper straight) | multipath (and a bias)"),
+    ("gps", "open", "GPS: open (everywhere) | tunnel (no fix in the upper left corner) | multipath (and a bias)"),
     ("speed", "0.5", "speed of the driver along the loop, m/s"),
     ("rviz", "auto", "RViz 2 with the lab's view: auto | true | false"),
     ("headless", "false", "without the window (SDL dummy driver)"),
@@ -84,6 +84,31 @@ def _start(context):
     elif wanted == "auto":
         actions.append(LogInfo(msg="[kalman] rviz2 is not installed: sudo apt install ros-$ROS_DISTRO-rviz2"))
     return actions
+
+
+EKF_ARGS = [
+    ("robot", "muster", "robot name"),
+    ("params", "", "parameter file of the ekf_node (empty = config/ekf.yaml of this lab)"),
+]
+
+
+def _start_ekf(context):
+    """Task 3: robot_localization's ekf_node in the namespace of the robot, and the bridge to kf/pose."""
+    from launch_ros.actions import Node
+    arg = lambda name: LaunchConfiguration(name).perform(context)   # noqa: E731
+    robot, params = arg("robot"), arg("params") or paths.lab_file("config", "ekf.yaml")
+    frames = {"use_sim_time": True, "map_frame": "map", "odom_frame": f"{robot}/odom",
+              "base_link_frame": f"{robot}/base_link"}
+    return [LogInfo(msg=f"[kalman] robot_localization ekf_node with {params}"),
+            Node(package="robot_localization", executable="ekf_node", name="ekf", namespace=robot,
+                 parameters=[params, frames], output="screen"),
+            given_node("ekf_bridge.py", robot, f"params:={params}")]
+
+
+def describe_ekf() -> LaunchDescription:
+    return LaunchDescription([DeclareLaunchArgument(name, default_value=default, description=text)
+                              for name, default, text in EKF_ARGS]
+                             + [OpaqueFunction(function=_start_ekf)])
 
 
 def describe() -> LaunchDescription:

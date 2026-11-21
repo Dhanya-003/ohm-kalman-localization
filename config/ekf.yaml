@@ -1,0 +1,49 @@
+# Task 3: the EKF of robot_localization (ekf_node), started by launch/ekf.launch.py in the namespace of the robot.
+# Topics are relative: gps_cov is /muster/gps_cov. The launch file sets the frames muster/odom, muster/base_link.
+#
+# Each *_config is 15 booleans, which entries of the message are fused, in the order of the state:
+#   x      y      z
+#   roll   pitch  yaw
+#   vx     vy     vz        (velocities in the frame of the robot)
+#   vroll  vpitch vyaw
+#   ax     ay     az
+# R is the covariance in the message itself.
+/**:
+  ros__parameters:
+    frequency: 10.0               # Hz, prediction steps and outputs
+    two_d_mode: true              # z, roll, pitch stay 0
+    publish_tf: false             # the simulator publishes the tf tree
+    world_frame: map              # the estimate is in map, like your filter
+
+    pose0: gps_cov                # geometry_msgs/msg/PoseWithCovarianceStamped
+    pose0_config: [true,  true,  false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    # pose0_rejection_threshold: 3.0     # Mahalanobis distance in standard deviations
+
+    odom0: odom                   # nav_msgs/msg/Odometry
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  true,  false,
+                   false, false, true,
+                   false, false, false]
+
+    # Covariance of the initial state, 15 x 15 in the order above (the default is 1e-9 on the diagonal).
+    # initial_estimate_covariance: [
+    #    100.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,  100.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    1.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    1.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    1.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    1.0,    0.0,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9,    0.0,
+    #      0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0,    0.0, 1.0e-9]

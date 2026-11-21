@@ -7,6 +7,7 @@ Handout: `docs/kalman.pdf` (`make` in `docs/`).
 ## Install
 
 ```bash
+sudo apt install ros-jazzy-robot-localization
 cd ~/ros2_ws/src
 git clone git@github.com:christianpfitzner/ir-mecanum-lab.git
 git clone git@github.com:christianpfitzner/ohm-kalman-localization.git
@@ -21,6 +22,7 @@ source install/setup.bash
 |---|---|
 | `ros2 launch ohm_kalman_localization kalman.launch.py` | simulator in the hall `open`, the robot drives a loop, monitor, RViz |
 | `ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1` | your filter: task 1 GPS, task 2 GPS and odometry |
+| `ros2 launch ohm_kalman_localization ekf.launch.py` | task 3: robot_localization's ekf_node with `config/ekf.yaml` instead of your node |
 | `ros2 launch ohm_kalman_localization kalman.launch.py gps:=tunnel` | no fix in the tunnel; `gps:=multipath` adds a biased zone |
 | `ros2 run ohm_kalman_localization plot_run.py` | plots of the newest run in `runs/` |
 | `python3 hint.py 1.3` | the next of three hints for `STUDENT 1.3`; without a block: the hints opened so far |

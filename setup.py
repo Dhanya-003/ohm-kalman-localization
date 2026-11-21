@@ -23,7 +23,7 @@ setup(
         (os.path.join("share", "ament_index", "resource_index", "packages"), ["resource/" + PACKAGE]),
         (os.path.join("share", PACKAGE), ["package.xml"]),
         (os.path.join("share", PACKAGE, "launch"), glob("launch/*.py")),
-        (os.path.join("share", PACKAGE, "config"), glob("config/*.json")),
+        (os.path.join("share", PACKAGE, "config"), glob("config/*.json") + glob("config/*.yaml")),
         (os.path.join("share", PACKAGE, "rviz"), glob("rviz/*.rviz")),
         (os.path.join("lib", PACKAGE), glob("student/*.py") + glob("nodes/*.py")),
     ],

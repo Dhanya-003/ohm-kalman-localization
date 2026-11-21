@@ -94,17 +94,41 @@ def test_the_monitor_finds_the_zones_and_the_plot_finds_the_outages(tmp_path):
     assert plot.outages(gps, 0.0, 7.0) == [(2.0, 6.0)]
 
 
+def test_the_ekf_config_fuses_gps_position_and_odometry_velocity():
+    yaml = pytest.importorskip("yaml")
+    with open(paths.lab_file("config", "ekf.yaml"), encoding="utf-8") as handle:
+        text = handle.read()
+    p = yaml.safe_load(text)["/**"]["ros__parameters"]
+    assert p["two_d_mode"] and not p["publish_tf"] and p["world_frame"] == "map"
+    assert (p["pose0"], p["odom0"]) == ("gps_cov", "odom")
+    assert [i for i, on in enumerate(p["pose0_config"]) if on] == [0, 1]                 # x, y
+    assert [i for i, on in enumerate(p["odom0_config"]) if on] == [6, 7, 11]             # vx, vy, vyaw
+    # the two lines task 3 switches on: they must parse, and the matrix must have one type (ROS 2 parameters)
+    on = text.replace("    # pose0_rejection_threshold", "    pose0_rejection_threshold") \
+             .replace("    # initial_estimate_covariance:", "    initial_estimate_covariance:").replace("\n    #   ", "\n        ")
+    p = yaml.safe_load(on)["/**"]["ros__parameters"]
+    assert p["pose0_rejection_threshold"] == 3.0
+    matrix = p["initial_estimate_covariance"]
+    assert len(matrix) == 225 and {type(v) for v in matrix} == {float}
+    assert [matrix[16 * i] for i in (0, 1, 5)] == [100.0, 100.0, 1.0]
+
+
 def test_the_launch_file_has_its_arguments():
     if not shutil.which("ros2"):
         pytest.skip("ROS 2 is not sourced")
+    env = dict(os.environ, PYTHONPATH=os.pathsep.join([ROOT, os.environ.get("PYTHONPATH", "")]))   # this checkout,
     out = subprocess.run(["ros2", "launch", os.path.join(ROOT, "launch", "kalman.launch.py"), "--show-args"],
-                         capture_output=True, text=True, timeout=60).stdout
+                         capture_output=True, text=True, timeout=60, env=env).stdout                # not an install
     for name in ("robot", "gps", "speed", "rviz", "headless", "seconds"):
         assert f"'{name}'" in out
+    out = subprocess.run(["ros2", "launch", os.path.join(ROOT, "launch", "ekf.launch.py"), "--show-args"],
+                         capture_output=True, text=True, timeout=60, env=env).stdout
+    assert "'robot'" in out and "'params'" in out
 
 
 def test_the_nodes_are_executable():
-    for rel in ("student/kalman_node.py", "nodes/route_node.py", "nodes/monitor_node.py", "nodes/plot_run.py"):
+    for rel in ("student/kalman_node.py", "nodes/route_node.py", "nodes/monitor_node.py", "nodes/plot_run.py",
+                "nodes/ekf_bridge.py"):
         path = os.path.join(ROOT, rel)
         assert os.access(path, os.X_OK), rel
         with open(path, encoding="utf-8") as handle:

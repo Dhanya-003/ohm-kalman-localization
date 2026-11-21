@@ -75,6 +75,15 @@
     terminal 2 & \texttt{ros2 run ohm\_kalman\_localization kalman\_node.py -\kern0pt-ros-args #2}
   \end{tabularx}
 \end{tcolorbox}}
+% \runningekf{<launch arguments>}: task 3, terminal 2 starts robot_localization instead of your node
+\newcommand{\runningekf}[1]{\begin{tcolorbox}[base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faTerminal~Running}, coltitle=ohmgrey, colbacktitle=black!3, fonttitle=\small\bfseries,
+        toptitle=2pt, bottomtitle=0pt, fontupper=\small]
+  \begin{tabularx}{\linewidth}{@{}>{\color{ohmgrey}}l >{\raggedright\arraybackslash}X@{}}
+    terminal 1 & \texttt{ros2 launch ohm\_kalman\_localization kalman.launch.py#1} \\
+    terminal 2 & \texttt{ros2 launch ohm\_kalman\_localization ekf.launch.py}
+  \end{tabularx}
+\end{tcolorbox}}
 % \expected[<note>]{<name>}: the path (figures/run_<name>.tikz) and the monitor (figures/term_<name>.txt)
 \newtcolorbox{seebox}{base, colback=ohmgreen!3, borderline west={2.5pt}{0pt}{ohmgreen!60},
         title={\faEye[regular]~What you should see}, coltitle=ohmgreen!80!black, colbacktitle=ohmgreen!3,
@@ -114,12 +123,13 @@ where the robot is. It has two sensors:
   \item \textbf{GPS}: 5 fixes per second, \(\sigma = 0.5\)\,m in \(x\) and \(y\), no drift. No fix in the tunnel.
   \item \textbf{Odometry}: 50 messages per second. Good velocity, drifting position.
 \end{itemize}
-Task 1 uses GPS alone, task 2 GPS and the velocity of the odometry.
+Task 1 uses GPS alone, task 2 GPS and the velocity of the odometry. Task 3 compares your filter with the
+EKF of the ROS package \thema{robot\_localization}.
 
 \paragraph{Linear filter.} State \(\vec x = (x, y, v_x, v_y)\T\) in the world frame, constant-velocity model.
 GPS measures \(x, y\). The odometry velocity is rotated into the world frame with the heading of the odometry
 and then measures \(v_x, v_y\). Model and measurements are linear in the state. The heading is taken from the
-odometry, not estimated (\cref{sec:outlook}).
+odometry, not estimated; with the heading in the state the model is non-linear (task 3).
 
 \begin{figure}[ht]
   \centering
@@ -139,13 +149,14 @@ odometry, not estimated (\cref{sec:outlook}).
 min & task & done when \\
 \midrule
 0--15 & \cref{sec:task0} The sensors & \cref{tab:sensors} is filled in \\
-15--55 & \cref{sec:task1} GPS alone: the filter & \thema{pytest -k task1} passes \\
-55--70 & \cref{sec:task1b} GPS alone: in the loop & the red path follows the robot \\
-70--100 & \cref{sec:task1c} GPS alone: the process noise & \cref{tab:q} is filled in \\
-100--110 & break & \\
-110--145 & \cref{sec:task2} GPS and odometry & \cref{tab:sigmav} is filled in \\
-145--170 & \cref{sec:task2b} The tunnel & \cref{tab:tunnel} is filled in \\
-170--180 & \cref{sec:extra} Extra task: multipath & \\
+15--50 & \cref{sec:task1} GPS alone: the filter & \thema{pytest -k task1} passes \\
+50--65 & \cref{sec:task1b} GPS alone: in the loop & the red path follows the robot \\
+65--90 & \cref{sec:task1c} GPS alone: the process noise & \cref{tab:q} is filled in \\
+90--100 & break & \\
+100--130 & \cref{sec:task2} GPS and odometry & \cref{tab:sigmav} is filled in \\
+130--150 & \cref{sec:task2b} The tunnel & \cref{tab:tunnel} is filled in \\
+150--180 & \cref{sec:task3} \thema{robot\_localization} & \cref{tab:ekf} is filled in \\
+--- & \cref{sec:extra} Extra task: multipath & if time is left \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -179,7 +190,11 @@ git -C ir-mecanum-lab pull
 \end{lstlisting}
 Commit after every task and push, so nothing is lost at the end of the session.
 
-\paragraph{Build.} Build once, then source the workspace in every new terminal:
+\paragraph{Build.} Task 3 needs the package \thema{robot\_localization}:
+\begin{lstlisting}
+sudo apt install ros-jazzy-robot-localization
+\end{lstlisting}
+Build once, then source the workspace in every new terminal:
 \begin{lstlisting}
 colcon build --symlink-install --packages-select mecanum_lab_interfaces mecanum_lab ohm_kalman_localization
 \end{lstlisting}
@@ -305,7 +320,7 @@ speed while the robot stands at the stop & --- & \\
 \end{checkpoint}
 
 \newpage
-\section{Task 1: GPS alone, the filter\minutes{40}}
+\section{Task 1: GPS alone, the filter\minutes{35}}
 \label{sec:task1}
 \running{}{(nothing yet, the tests first)}
 
@@ -399,7 +414,7 @@ corrects with every fix. Every 5\,s it prints the state, \(\sigma\) and the gain
 \end{checkpoint}
 
 \newpage
-\section{Task 1: GPS alone, the process noise\minutes{30}}
+\section{Task 1: GPS alone, the process noise\minutes{25}}
 \label{sec:task1c}
 \running{}{-p task:=1 -p sigma\_a:=0.0}
 
@@ -455,7 +470,7 @@ and \(\sigma_a = 0.3\).
 \end{checkpoint}
 
 \newpage
-\section{Task 2: GPS and odometry\minutes{35}}
+\section{Task 2: GPS and odometry\minutes{30}}
 \label{sec:task2}
 \running{}{-p task:=2}
 
@@ -509,7 +524,7 @@ Run the values of \(\sigma_v\) in \cref{tab:sigmav}, one lap each.
 \end{checkpoint}
 
 \newpage
-\section{Task 2: the tunnel\minutes{25}}
+\section{Task 2: the tunnel\minutes{20}}
 \label{sec:task2b}
 \running{ gps:=tunnel}{-p task:=1 \textrm{, then} -p task:=2 -p sigma\_v:=0.2}
 
@@ -551,7 +566,63 @@ Explain \cref{tab:tunnel}: what does the filter know about the motion in the tun
 \end{checkpoint}
 
 \newpage
-\section{Extra task: multipath\minutes{10}}
+\section{Task 3: robot\_localization\minutes{30}}
+\label{sec:task3}
+\runningekf{ gps:=tunnel}
+
+ROS has an established Kalman filter: the \thema{ekf\_node} of the package \thema{robot\_localization}, used on
+many robots. You do not program it, you configure it, in \datei{config/ekf.yaml}. Stop your node. The launch
+file of terminal 2 starts the \thema{ekf\_node} and a small node that puts its estimate on
+\thema{/muster/kf/pose}: monitor, RViz and \thema{plot\_run.py} work as before.
+
+\begin{note}
+The state of the \thema{ekf\_node} has 15 entries: position, orientation, velocity, angular velocity and
+acceleration in 3D. With \thema{two\_d\_mode} it stays in the plane. The heading is part of the state, so the
+model is non-linear: an EKF (script section 3.1.4). \(\mat R\) of every measurement is the covariance in the message.
+\end{note}
+
+\begin{enumerate}
+  \item Read \datei{config/ekf.yaml}. Which entries of the GPS and of the odometry are fused? Compare with your
+        \(\mat H\) of 1.5 and 2.1. Which \(\sigma\) of the velocity does the \thema{ekf\_node} use?
+\begin{lstlisting}
+ros2 topic echo --once /muster/odom --field twist.covariance
+\end{lstlisting}
+  \item Start terminal 2. Where does the estimate start in RViz? Run two laps and fill in the first row of
+        \cref{tab:ekf}.
+  \item Your filter takes the heading from the odometry. Do the same here: set \thema{yaw} in
+        \thema{odom0\_config} to \thema{true}. Restart terminal 2 only. Second row.
+  \item Remove the \thema{\#} in front of \thema{pose0\_rejection\_threshold}. It rejects a fix whose
+        Mahalanobis distance is above 3, i.\,e.\ \(d^2 > 9\), your gate of the extra task. Third row. What happens,
+        and why? Then remove the \thema{\#} in front of \thema{initial\_estimate\_covariance} and its 15 rows.
+        Fourth row.
+\end{enumerate}
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{Your filter and \thema{robot\_localization} with \thema{gps:=tunnel}. Fill in.}
+\label{tab:ekf}
+\begin{tabular}{@{}p{6.0cm}p{2.4cm}p{2.8cm}p{1.8cm}@{}}
+\toprule
+& filter in m & largest error in the tunnel & NEES \\
+\midrule
+your filter, task 2 & & & \\
+\datei{ekf.yaml} as given & & & \\
++ \thema{yaw} of the odometry & & & \\
++ \thema{pose0\_rejection\_threshold} & & & \\
++ \thema{initial\_estimate\_covariance} & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\expected[\datei{ekf.yaml} as given; ]{ekf}
+
+\begin{checkpoint}
+What does the \thema{ekf\_node} do that your filter does not? What does your filter do that it does not? Which
+default made it worse here, and how would you notice that on a real robot, without the truth?
+\end{checkpoint}
+
+\newpage
+\section{Extra task: multipath}
 \label{sec:extra}
 \running{ gps:=multipath}{-p task:=2 -p sigma\_v:=0.2 -p gate:=9.21}
 
@@ -579,11 +650,5 @@ the gate is on.
 \end{itemize}
 
 \expected[with the gate; ]{gate}
-
-\section{Outlook: the heading}
-\label{sec:outlook}
-The filter takes the heading from the odometry. A heading error rotates every measured velocity. To estimate
-the heading too, the state becomes \(\vec x = (x, y, \theta, v)\T\) with the odometry as input. The model then
-contains \(\cos\theta\) and \(\sin\theta\) and is non-linear: Extended Kalman filter, script section 3.1.4.
 
 \end{document}

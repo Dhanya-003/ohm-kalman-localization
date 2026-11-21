@@ -197,7 +197,9 @@ class MonitorNode(Node):
     def open_csv(self) -> None:
         i = self.info
         name = f"task{i.get('task', 0)}_a{i.get('sigma_a', 0)}"
-        if i.get("task", 1) >= 2:
+        if i.get("task") == "ekf":
+            name = "ekf_" + os.path.splitext(i.get("params", "ekf.yaml"))[0]
+        elif i.get("task", 1) >= 2:
             name += f"_v{i.get('sigma_v', 0)}"
         if i.get("gate"):
             name += f"_gate{i.get('gate')}"
