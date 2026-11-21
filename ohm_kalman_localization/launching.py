@@ -93,7 +93,7 @@ EKF_ARGS = [
 
 
 def _start_ekf(context):
-    """Task 3: robot_localization's ekf_node in the namespace of the robot, and the bridge to kf/pose."""
+    """Task 4: robot_localization's ekf_node in the namespace of the robot, and the bridge to kf/pose."""
     from launch_ros.actions import Node
     arg = lambda name: LaunchConfiguration(name).perform(context)   # noqa: E731
     robot, params = arg("robot"), arg("params") or paths.lab_file("config", "ekf.yaml")

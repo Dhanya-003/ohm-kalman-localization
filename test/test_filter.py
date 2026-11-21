@@ -2,6 +2,7 @@
 
     python3 -m pytest test/test_filter.py -q -k task1
     python3 -m pytest test/test_filter.py -q -k task2
+    python3 -m pytest test/test_filter.py -q -k task3
     python3 -m pytest test/test_filter.py -q -k extra
 """
 import math
@@ -126,6 +127,50 @@ def test_task2_the_odometry_pins_the_velocity_and_carries_the_position():
     assert f.x[2:] == pytest.approx([0.0, 0.5], abs=0.02)
     assert f.x[1] == pytest.approx(1.0, abs=0.1)
     assert math.sqrt(f.P[3, 3]) < 0.05
+
+
+# ------------------------------------------------------------------ task 3
+
+@pytest.mark.parametrize("x, u, dt, new", [
+    ((0.0, 0.0, 0.0), (0.5, 0.0, 0.0), 2.0, (1.0, 0.0, 0.0)),                       # straight ahead
+    ((1.0, 2.0, math.pi / 2), (0.5, 0.0, 0.0), 2.0, (1.0, 3.0, math.pi / 2)),       # heading north
+    ((0.0, 0.0, math.pi / 2), (0.0, 0.3, 0.0), 1.0, (-0.3, 0.0, math.pi / 2)),      # sideways, to the left
+    ((0.0, 0.0, 0.0), (0.0, 0.0, 0.5), 1.0, (0.0, 0.0, 0.5)),                       # turning on the spot
+    ((0.0, 0.0, 3.0), (0.0, 0.0, 0.5), 1.0, (0.0, 0.0, 3.5 - 2 * math.pi)),         # theta stays in -pi .. pi
+])
+def test_task3_1_motion_model_drives_with_the_velocity_of_the_robot(x, u, dt, new):
+    assert M.motion_model(np.array(x), u, dt) == pytest.approx(new, abs=1e-9)
+
+
+@pytest.mark.parametrize("theta", [0.0, 0.7, 2.5, -1.9])
+def test_task3_2_the_jacobian_is_the_derivative_of_the_motion_model(theta):
+    x, u, dt, eps = np.array([3.0, -1.0, theta]), (0.4, 0.1, 0.3), 0.5, 1e-6
+    numeric = np.column_stack([(M.motion_model(x + eps * e, u, dt) - M.motion_model(x - eps * e, u, dt)) / (2 * eps)
+                               for e in np.eye(3)])
+    assert M.motion_jacobian(x, u, dt) == pytest.approx(numeric, abs=1e-6)
+
+
+def test_task3_3_predict_nonlinear_takes_f_and_carries_P_with_F():
+    f = KF.KalmanFilter([0.0, 0.0, 0.0], np.diag([0.1, 0.1, 0.2]))
+    F = np.array([[1.0, 0.0, -0.5], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]])
+    Q = np.diag([0.01, 0.01, 0.001])
+    f.predict_nonlinear(np.array([1.0, 2.0, 0.3]), F, Q)
+    assert f.x == pytest.approx([1.0, 2.0, 0.3])
+    assert f.P == pytest.approx(F @ np.diag([0.1, 0.1, 0.2]) @ F.T + Q)
+
+
+def test_task3_the_ekf_finds_a_wrong_heading_from_gps_alone():
+    rng, dt, heading, u = random.Random(2), 0.02, 0.5, (0.5, 0.0, 0.0)
+    f, pose = KF.KalmanFilter([2.0, 1.0, -0.5], np.diag([0.25, 0.25, 1.0])), np.array([2.0, 1.0, heading])
+    for n in range(1, 1501):                                        # 30 s at 50 Hz, a fix every 0.2 s
+        pose = pose + np.array([math.cos(heading), math.sin(heading), 0.0]) * 0.5 * dt
+        x = f.x
+        f.predict_nonlinear(M.motion_model(x, u, dt), M.motion_jacobian(x, u, dt), M.input_noise(x, dt, 0.05, 0.02))
+        if n % 10 == 0:
+            z, H, R = M.gps_measurement(gps_msg(pose[0] + rng.gauss(0, 0.5), pose[1] + rng.gauss(0, 0.5), 0.25, 0.25))
+            f.correct(z, H[:, :3], R)
+    assert abs(math.degrees(f.x[2] - heading)) < 3.0
+    assert math.dist(f.x[:2], pose[:2]) < 0.4
 
 
 # ------------------------------------------------------------------ extra task

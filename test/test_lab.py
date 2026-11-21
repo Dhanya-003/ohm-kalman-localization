@@ -103,7 +103,7 @@ def test_the_ekf_config_fuses_gps_position_and_odometry_velocity():
     assert (p["pose0"], p["odom0"]) == ("gps_cov", "odom")
     assert [i for i, on in enumerate(p["pose0_config"]) if on] == [0, 1]                 # x, y
     assert [i for i, on in enumerate(p["odom0_config"]) if on] == [6, 7, 11]             # vx, vy, vyaw
-    # the two lines task 3 switches on: they must parse, and the matrix must have one type (ROS 2 parameters)
+    # the two lines task 4 switches on: they must parse, and the matrix must have one type (ROS 2 parameters)
     on = text.replace("    # pose0_rejection_threshold", "    pose0_rejection_threshold") \
              .replace("    # initial_estimate_covariance:", "    initial_estimate_covariance:").replace("\n    #   ", "\n        ")
     p = yaml.safe_load(on)["/**"]["ros__parameters"]

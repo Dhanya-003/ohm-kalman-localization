@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Task 3 (given): the output of robot_localization on the topics of your filter, so the monitor compares both.
+"""Task 4 (given): the output of robot_localization on the topics of your filter, so the monitor compares both.
 
     /<robot>/odometry/filtered (nav_msgs/msg/Odometry)  ->  /<robot>/kf/pose, /<robot>/kf/twist, /<robot>/kf/info
 

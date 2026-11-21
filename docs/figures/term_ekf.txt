@@ -1,6 +1,6 @@
-t  124.2 s | GPS 0.77 m | filter 0.29 m, max 0.64 m, 2.6x better | sigma 0.25 m | NEES 0.7
-t  134.2 s | GPS 0.72 m | filter 0.31 m, max 0.59 m, 2.3x better | sigma 0.27 m | NEES 0.7
-t  144.2 s | GPS 0.69 m | filter 0.57 m, max 1.12 m, 1.2x better | sigma 0.67 m | NEES 0.5
+t  124.2 s | GPS 0.77 m | filter 0.29 m, max 0.64 m, 2.6x | sigma 0.25 m | NEES 0.7
+t  134.2 s | GPS 0.72 m | filter 0.31 m, max 0.59 m, 2.3x | sigma 0.27 m | NEES 0.7
+t  144.2 s | GPS 0.69 m | filter 0.57 m, max 1.12 m, 1.2x | sigma 0.67 m | NEES 0.5
 tunnel: 19.8 s inside, largest error 1.25 m, largest sigma 2.89 m
-t  154.2 s | GPS 0.69 m | filter 0.79 m, max 1.26 m, 0.9x better | sigma 1.22 m | NEES 0.3
-t  164.2 s | GPS 0.76 m | filter 0.79 m, max 1.26 m, 1.0x better | sigma 1.20 m | NEES 0.4
+t  154.2 s | GPS 0.69 m | filter 0.79 m, max 1.26 m, 0.9x | sigma 1.22 m | NEES 0.3
+t  164.2 s | GPS 0.76 m | filter 0.79 m, max 1.26 m, 1.0x | sigma 1.20 m | NEES 0.4

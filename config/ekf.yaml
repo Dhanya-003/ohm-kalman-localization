@@ -1,4 +1,4 @@
-# Task 3: the EKF of robot_localization (ekf_node), started by launch/ekf.launch.py in the namespace of the robot.
+# Task 4: the EKF of robot_localization (ekf_node), started by launch/ekf.launch.py in the namespace of the robot.
 # Topics are relative: gps_cov is /muster/gps_cov. The launch file sets the frames muster/odom, muster/base_link.
 #
 # Each *_config is 15 booleans, which entries of the message are fused, in the order of the state:

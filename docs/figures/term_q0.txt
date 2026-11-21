@@ -1,6 +1,0 @@
-t  240.3 s | GPS 0.75 m | filter 5.07 m, max 7.36 m, 0.1x better | sigma 0.03 m | NEES 14647.8
-t  250.3 s | GPS 0.77 m | filter 5.82 m, max 7.36 m, 0.1x better | sigma 0.03 m | NEES 20216.5
-t  260.3 s | GPS 0.78 m | filter 5.96 m, max 7.36 m, 0.1x better | sigma 0.03 m | NEES 21592.1
-t  270.3 s | GPS 0.74 m | filter 5.16 m, max 7.19 m, 0.1x better | sigma 0.03 m | NEES 16704.9
-t  280.3 s | GPS 0.75 m | filter 4.61 m, max 6.23 m, 0.2x better | sigma 0.03 m | NEES 14149.3
-t  290.3 s | GPS 0.72 m | filter 4.85 m, max 5.78 m, 0.1x better | sigma 0.03 m | NEES 16287.5

@@ -10,6 +10,7 @@ Every `period` s one line over the last `window` s of simulation time:
     filter  RMSE and largest error of /<robot>/kf/pose, and how many times better than GPS
     sigma   mean standard deviation the filter claims (sqrt of the diagonal of P)
     NEES    mean of e^T P^-1 e / 2 over the estimates: about 1 if sigma is honest, > 1 overconfident
+    heading RMS error of the heading, for an estimate with a heading of its own (the EKF of task 3)
 
 and after every pass through a GPS zone of the config (tunnel, multipath) its largest error and sigma. Each run of
 your node (a new start of kalman_node.py) is written to runs/<task>_<settings>_<time>.csv for plot_run.py.
@@ -54,6 +55,7 @@ class MonitorNode(Node):
         self.truth = collections.deque(maxlen=4000)            # (t, x, y)
         self.gps = collections.deque()                         # (t, squared error)
         self.est = collections.deque()                         # (t, squared error, nees, sigma)
+        self.heading = collections.deque()                     # (t, squared heading error) of an EKF
         self.fixes = collections.deque()                       # (t, x, y) for RViz
         self.path = collections.deque()                        # (t, x, y) of the estimate
         self.pending = collections.deque()                     # estimates newer than the newest truth
@@ -77,7 +79,8 @@ class MonitorNode(Node):
         t = stamp(msg)
         if self.truth and t < self.truth[-1][0]:
             self.truth.clear()                                 # simulator restarted
-        self.truth.append((t, msg.pose.position.x, msg.pose.position.y))
+        q = msg.pose.orientation
+        self.truth.append((t, msg.pose.position.x, msg.pose.position.y, math.atan2(2 * q.w * q.z, 1 - 2 * q.z * q.z)))
         while self.pending and self.pending[0][0] <= t:
             self.evaluate(*self.pending.popleft())
 
@@ -87,9 +90,9 @@ class MonitorNode(Node):
         i = bisect.bisect_left(times, t)
         if i == 0 or i >= len(times) or times[i] - times[i - 1] > 0.5:
             return None
-        (t0, x0, y0), (t1, x1, y1) = self.truth[i - 1], self.truth[i]
+        (t0, x0, y0, _), (t1, x1, y1, th1) = self.truth[i - 1], self.truth[i]
         a = (t - t0) / (t1 - t0) if t1 > t0 else 0.0
-        return x0 + a * (x1 - x0), y0 + a * (y1 - y0), (x1 - x0) / (t1 - t0), (y1 - y0) / (t1 - t0)
+        return x0 + a * (x1 - x0), y0 + a * (y1 - y0), (x1 - x0) / (t1 - t0), (y1 - y0) / (t1 - t0), th1
 
     # ------------------------------------------------------------------ measurements and estimates
 
@@ -119,6 +122,10 @@ class MonitorNode(Node):
         nees = (c[7] * ex * ex - (c[1] + c[6]) * ex * ey + c[0] * ey * ey) / det / 2.0 if det > 0 else float("inf")
         sigma = math.sqrt((max(c[0], 0.0) + max(c[7], 0.0)) / 2.0)
         self.est.append((t, ex * ex + ey * ey, nees, sigma))
+        if c[35] > 1e-5:                                       # the estimate has a heading of its own (EKF)
+            q = msg.pose.pose.orientation
+            d = math.atan2(2 * q.w * q.z, 1 - 2 * q.z * q.z) - true[4]
+            self.heading.append((t, math.atan2(math.sin(d), math.cos(d)) ** 2))
         tw = twist.twist if twist else None
         self.row("kf", t, x, y, math.sqrt(max(c[0], 0.0)), math.sqrt(max(c[7], 0.0)), c[1],
                  tw.twist.linear.x if tw else "", tw.twist.linear.y if tw else "",
@@ -153,7 +160,7 @@ class MonitorNode(Node):
             self.file.close()
             self.get_logger().info(f"run written to {os.path.relpath(self.file.name)}")
         self.file, self.writer, self.info = None, None, None
-        self.gps.clear(), self.est.clear(), self.path.clear(), self.pending.clear()
+        self.gps.clear(), self.est.clear(), self.path.clear(), self.pending.clear(), self.heading.clear()
         self.last_report, self.inside = t, None
         self.get_logger().info(f"new run of the filter at t = {t:.1f} s")
 
@@ -161,7 +168,7 @@ class MonitorNode(Node):
         if t - self.last_report < self.period:
             return
         self.last_report = t
-        for queue in (self.gps, self.est):
+        for queue in (self.gps, self.est, self.heading):
             while queue and queue[0][0] < t - self.window:
                 queue.popleft()
         if not self.est:
@@ -172,10 +179,12 @@ class MonitorNode(Node):
         nees = sum(min(e[2], 1e6) for e in self.est) / len(self.est)
         if self.gps:
             gps = math.sqrt(sum(e[1] for e in self.gps) / len(self.gps))
-            text = f"t {t:6.1f} s | GPS {gps:.2f} m | filter {rmse:.2f} m, max {worst:.2f} m, {gps / rmse:.1f}x better"
+            text = f"t {t:6.1f} s | GPS {gps:.2f} m | filter {rmse:.2f} m, max {worst:.2f} m, {gps / rmse:.1f}x"
         else:
             text = f"t {t:6.1f} s | GPS: no fix | filter {rmse:.2f} m, max {worst:.2f} m"
         text += f" | sigma {sigma:.2f} m | NEES {nees:.1f}"
+        if self.heading:
+            text += f" | heading {math.degrees(math.sqrt(sum(e[1] for e in self.heading) / len(self.heading))):.1f} deg"
         self.get_logger().info(text)
 
     def zone_pass(self, t: float, true, error: float, sigma: float) -> None:
@@ -199,6 +208,10 @@ class MonitorNode(Node):
         name = f"task{i.get('task', 0)}_a{i.get('sigma_a', 0)}"
         if i.get("task") == "ekf":
             name = "ekf_" + os.path.splitext(i.get("params", "ekf.yaml"))[0]
+        elif i.get("task") == 3:
+            name = f"task3_v{i.get('sigma_v', 0)}_w{i.get('sigma_w', 0)}"
+            if i.get("theta0"):
+                name += f"_theta{i.get('theta0')}_s{i.get('sigma_theta0')}"
         elif i.get("task", 1) >= 2:
             name += f"_v{i.get('sigma_v', 0)}"
         if i.get("gate"):
@@ -213,7 +226,7 @@ class MonitorNode(Node):
     def row(self, kind, t, x, y, sx, sy, sxy, vx="", vy="", svx="", svy="", true=None) -> None:
         if self.writer is None:
             return
-        values = [kind, t, x, y, sx, sy, sxy, vx, vy, svx, svy] + list(true)
+        values = [kind, t, x, y, sx, sy, sxy, vx, vy, svx, svy] + list(true[:4])
         self.writer.writerow([v if isinstance(v, str) else f"{v:.4f}" for v in values])
 
     # ------------------------------------------------------------------ RViz
@@ -225,7 +238,7 @@ class MonitorNode(Node):
         for queue in (self.fixes, self.path):
             while queue and queue[0][0] < now - KEEP:
                 queue.popleft()
-        truth = [s for s in self.truth if s[0] >= now - KEEP]
+        truth = [s[:3] for s in self.truth if s[0] >= now - KEEP]
         self.pub_truth.publish(make_path(truth, now))
         self.pub_kf.publish(make_path(list(self.path), now))
         markers = MarkerArray()

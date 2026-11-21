@@ -61,6 +61,9 @@
 \newtcolorbox{script}[1]{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
         title={\faBook~Lecture script, #1}, coltitle=ohmgrey, colbacktitle=black!3,
         fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
+\newtcolorbox{theory}[1]{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
+        title={\faGraduationCap~#1}, coltitle=ohmgrey, colbacktitle=black!3,
+        fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
 \newtcolorbox{note}{base, colback=ohmamber!8, borderline west={2.5pt}{0pt}{ohmamber}}
 \newtcolorbox{checkpoint}{base, colback=ohmgreen!7, borderline west={2.5pt}{0pt}{ohmgreen},
         title={\faCheckCircle[regular]~Checkpoint}, coltitle=ohmgreen, colbacktitle=ohmgreen!7,
@@ -123,13 +126,14 @@ where the robot is. It has two sensors:
   \item \textbf{GPS}: 5 fixes per second, \(\sigma = 0.5\)\,m in \(x\) and \(y\), no drift. No fix in the tunnel.
   \item \textbf{Odometry}: 50 messages per second. Good velocity, drifting position.
 \end{itemize}
-Task 1 uses GPS alone, task 2 GPS and the velocity of the odometry. Task 3 compares your filter with the
-EKF of the ROS package \thema{robot\_localization}.
+Task 1 uses GPS alone, task 2 GPS and the velocity of the odometry. In task 3 your filter estimates the
+heading too: an extended Kalman filter. Task 4 compares it with the EKF of the ROS package
+\thema{robot\_localization}.
 
-\paragraph{Linear filter.} State \(\vec x = (x, y, v_x, v_y)\T\) in the world frame, constant-velocity model.
-GPS measures \(x, y\). The odometry velocity is rotated into the world frame with the heading of the odometry
-and then measures \(v_x, v_y\). Model and measurements are linear in the state. The heading is taken from the
-odometry, not estimated; with the heading in the state the model is non-linear (task 3).
+\paragraph{Linear filter, then EKF.} Tasks 1 and 2: state \(\vec x = (x, y, v_x, v_y)\T\) in the world frame,
+constant-velocity model. GPS measures \(x, y\). The odometry velocity is rotated into the world frame with the
+heading of the odometry and then measures \(v_x, v_y\). Model and measurements are linear in the state. Task 3:
+state \(\vec x = (x, y, \theta)\T\). With the heading in the state, the model is non-linear.
 
 \begin{figure}[ht]
   \centering
@@ -151,11 +155,11 @@ min & task & done when \\
 0--15 & \cref{sec:task0} The sensors & \cref{tab:sensors} is filled in \\
 15--50 & \cref{sec:task1} GPS alone: the filter & \thema{pytest -k task1} passes \\
 50--65 & \cref{sec:task1b} GPS alone: in the loop & the red path follows the robot \\
-65--90 & \cref{sec:task1c} GPS alone: the process noise & \cref{tab:q} is filled in \\
-90--100 & break & \\
-100--130 & \cref{sec:task2} GPS and odometry & \cref{tab:sigmav} is filled in \\
-130--150 & \cref{sec:task2b} The tunnel & \cref{tab:tunnel} is filled in \\
-150--180 & \cref{sec:task3} \thema{robot\_localization} & \cref{tab:ekf} is filled in \\
+65--95 & \cref{sec:task2} GPS and odometry & \cref{tab:sigmav} is filled in \\
+95--105 & break & \\
+105--120 & \cref{sec:task2b} The tunnel & \cref{tab:tunnel} is filled in \\
+120--155 & \cref{sec:task3} Your own EKF & \cref{tab:theta} is filled in \\
+155--180 & \cref{sec:task4} \thema{robot\_localization} & \cref{tab:ekf} is filled in \\
 --- & \cref{sec:extra} Extra task: multipath & if time is left \\
 \bottomrule
 \end{tabular}
@@ -251,8 +255,13 @@ the task is done. Colours as in RViz: white the truth, green the GPS fixes, red 
 \(1\sigma\) ellipse.
 
 \paragraph{Monitor and plots.} Every 10\,s the monitor prints, over the last 30\,s: the RMSE of GPS and filter
-against the truth, the largest error, the \(\sigma\) of your filter and the NEES (\cref{sec:task1c}). Each start
-of your node is a new run in \datei{runs/}. Path, velocity and diagonal of \(\mat P\) of the last run:
+against the truth, how many times better the filter is (\thema{2.3x}), the largest error, the \(\sigma\) of your
+filter, the NEES and, for an EKF, the error of the heading. The NEES (normalized estimation error squared) checks whether \(\sigma\) fits the error:
+\begin{equation*}
+  \text{NEES} = \tfrac12\,\vec e\T \mat P_{xy}^{-1}\,\vec e , \qquad \vec e = \text{estimate} - \text{truth}.
+\end{equation*}
+About 1: \(\sigma\) fits. Much larger: \(\sigma\) is too small. Each start of your node is a new run in
+\datei{runs/}. Path, velocity and diagonal of \(\mat P\) of the last run:
 \begin{lstlisting}
 ros2 run ohm_kalman_localization plot_run.py
 \end{lstlisting}
@@ -371,7 +380,12 @@ Check: \thema{cv\_model(0.5) @ [0, 0, 2, 4]} is \thema{[1, 2, 2, 4]}.
 \thema{correct}: the new state (3.11) and the new covariance (3.12).
 \end{todo}
 
-\(\mat Q\) is given: \thema{process\_noise(dt, sigma\_a)} in \datei{models.py}, more in \cref{sec:task1c}.
+\begin{note}
+Given in \datei{models.py}: \thema{process\_noise(dt, sigma\_a)}. The model keeps the velocity constant, the robot
+brakes and turns. \(\mat Q\) models this as an unknown acceleration with standard deviation \(\sigma_a\), constant
+over the step: per axis \(\mat Q = \sigma_a^2 \, \vec g \vec g\T\) with \(\vec g = (\Delta t^2/2,\ \Delta t)\T\).
+The node uses \(\sigma_a = 0.3\)\,m/s\(^2\): the robot brakes and starts with 0.3\,m/s\(^2\).
+\end{note}
 
 
 \thema{pytest -k task1} also tries two examples of the script: the covariance ellipse (\(\tilde{\mat P} =
@@ -411,62 +425,6 @@ corrects with every fix. Every 5\,s it prints the state, \(\sigma\) and the gain
 
 \begin{checkpoint}
 \thema{pytest -k task1} passes. The filter is about two times better than the GPS, and the NEES is about 1.
-\end{checkpoint}
-
-\newpage
-\section{Task 1: GPS alone, the process noise\minutes{25}}
-\label{sec:task1c}
-\running{}{-p task:=1 -p sigma\_a:=0.0}
-
-\begin{note}
-Given in \datei{models.py}: \thema{process\_noise(dt, sigma\_a)}. The model keeps the velocity constant, the robot
-brakes and turns. \(\mat Q\) models this as an unknown acceleration with standard deviation \(\sigma_a\), constant
-over the step: it moves the position by \(a\,\Delta t^2/2\) and the velocity by \(a\,\Delta t\). Per axis
-\(\mat Q = \sigma_a^2 \, \vec g \vec g\T\) with \(\vec g = (\Delta t^2/2,\ \Delta t)\T\).
-\(\sigma_a = 0\) is \(\mat Q = \mat 0\).
-\end{note}
-
-Run the node with each \(\sigma_a\) of \cref{tab:q} for one lap (70\,s) and note the last line of the monitor.
-
-Besides the error, the monitor checks whether \(\sigma\) matches the error. The NEES (normalized estimation error
-squared) is
-\begin{equation*}
-  \text{NEES} = \tfrac12\,\vec e\T \mat P_{xy}^{-1}\,\vec e , \qquad \vec e = \text{estimate} - \text{truth},
-\end{equation*}
-averaged over the last 30\,s. About 1: \(\sigma\) fits the error. Much larger: \(\sigma\) is too small.
-
-\begin{table}[ht]\centering
-\renewcommand{\arraystretch}{1.4}
-\caption{GPS alone, five values of \(\sigma_a\). Fill in.}
-\label{tab:q}
-\begin{tabular}{@{}p{2.4cm}p{1.9cm}p{1.9cm}p{1.9cm}p{1.9cm}p{1.9cm}@{}}
-\toprule
-\(\sigma_a\) in m/s\(^2\) & GPS in m & filter in m & max in m & \(\sigma\) in m & NEES \\
-\midrule
-0 & & & & & \\
-0.1 & & & & & \\
-0.3 & & & & & \\
-1 & & & & & \\
-3 & & & & & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{itemize}
-  \item \(\sigma_a = 0\) is \(\mat Q = \mat 0\), the first exercise of the script. What happens to \(K\) and
-        to \(\sigma\) after a few laps? And to the error at the corners and at the stop?
-        \thema{plot\_run.py} shows it in the velocity.
-  \item Which \(\sigma_a\) gives the smallest error? Which one gives NEES \(\approx 1\)? Compare with what the
-        robot does: it brakes and starts with 0.3\,m/s\(^2\), and in a corner (\(r = 1\)\,m) it accelerates
-        with \(v^2/r = 0.25\)\,m/s\(^2\) towards the centre.
-  \item \(\sigma_a = 3\): why is the error larger again, although the NEES is fine?
-\end{itemize}
-
-\expected[\(\sigma_a = 0\); ]{q0}
-
-\begin{checkpoint}
-Explain \cref{tab:q}: what does a too small and a too large \(\mat Q\) do? Show the plots of \(\sigma_a = 0\)
-and \(\sigma_a = 0.3\).
 \end{checkpoint}
 
 \newpage
@@ -510,8 +468,7 @@ Run the values of \(\sigma_v\) in \cref{tab:sigmav}, one lap each.
 \end{table}
 
 \begin{itemize}
-  \item How much better than GPS alone (\cref{tab:q}, \(\sigma_a = 0.3\))? Compare the velocity in
-        \thema{plot\_run.py}.
+  \item How much better than GPS alone (task 1)? Compare the velocity in \thema{plot\_run.py}.
   \item The odometry speed scatters by about 0.001\,m/s (\cref{tab:sensors}), but it is 3\,\% too high:
         0.015\,m/s, the same in every message. Why does \(\sigma_v = 0.01\) give a large NEES? What follows for
         \(\mat R\)?
@@ -532,19 +489,20 @@ Restart terminal 1 with \thema{gps:=tunnel}. The tunnel covers the upper left co
 (\cref{fig:field}): about 18\,s without a fix. After each pass the monitor prints the largest error and the
 largest \(\sigma\) inside.
 
-Run task 1 for two laps, then task 2 for two laps. Fill in \cref{tab:tunnel}.
+Run task 1 for two laps, then task 2 for two laps. Fill in \cref{tab:tunnel}; the third column follows in
+task 3.
 
 \begin{table}[ht]\centering
 \renewcommand{\arraystretch}{1.4}
 \caption{Through the tunnel. Fill in.}
 \label{tab:tunnel}
-\begin{tabular}{@{}p{6.0cm}p{3.8cm}p{3.8cm}@{}}
+\begin{tabular}{@{}p{5.0cm}p{2.9cm}p{2.9cm}p{2.9cm}@{}}
 \toprule
-& task 1, GPS alone & task 2, with odometry \\
+& task 1, GPS alone & task 2, with odometry & task 3, EKF \\
 \midrule
-largest error in the tunnel, lap 1 & & \\
-largest error in the tunnel, lap 2 & & \\
-largest \(\sigma\) in the tunnel & & \\
+largest error in the tunnel, lap 1 & & & \\
+largest error in the tunnel, lap 2 & & & \\
+largest \(\sigma\) in the tunnel & & & \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -566,19 +524,128 @@ Explain \cref{tab:tunnel}: what does the filter know about the motion in the tun
 \end{checkpoint}
 
 \newpage
-\section{Task 3: robot\_localization\minutes{30}}
+\section{Task 3: your own EKF\minutes{35}}
 \label{sec:task3}
+\running{}{-p task:=3 -p sigma\_v:=0.2}
+
+Your filter of task 2 takes the heading \(\theta\) from the odometry and trusts it. Now the filter estimates
+\(\theta\) itself. State and input:
+\begin{equation*}
+  \vec x = \begin{pmatrix} x \\ y \\ \theta \end{pmatrix}, \qquad
+  \vec u = \begin{pmatrix} v_x^R \\ v_y^R \\ \omega \end{pmatrix} \quad\text{(the odometry, frame of the robot).}
+\end{equation*}
+The odometry is no longer a measurement. It is the input \(\vec u\) of the model, the \(\mat B \hat{\vec u}_n\) of
+(3.6). Over \(\Delta t\) seconds the robot moves by its velocity, rotated into the world frame, and turns by
+\(\omega\,\Delta t\):
+\begin{equation}
+  \vec f(\vec x, \vec u) =
+  \begin{pmatrix}
+    x + (v_x^R \cos\theta - v_y^R \sin\theta)\,\Delta t \\
+    y + (v_x^R \sin\theta + v_y^R \cos\theta)\,\Delta t \\
+    \theta + \omega\,\Delta t
+  \end{pmatrix} .
+  \label{eq:f}
+\end{equation}
+
+\begin{theory}{The extended Kalman filter (EKF)}
+\Cref{eq:f} contains \(\cos\theta\) and \(\sin\theta\): it cannot be written as \(\mat A \vec x\). A normal
+distribution sent through \(\vec f\) is no longer normal, and there is no \(\mat A\) for the covariance. The EKF
+linearizes \(\vec f\) at the current estimate, with the Jacobian, the matrix of all first derivatives:
+\begin{equation}
+  \mat F = \frac{\partial \vec f}{\partial \vec x}\bigg|_{\tilde{\vec x}^+_{n-1},\,\vec u_n}
+  = \begin{pmatrix}
+      1 & 0 & \partial f_x / \partial\theta \\
+      0 & 1 & \partial f_y / \partial\theta \\
+      0 & 0 & 1
+    \end{pmatrix} .
+  \label{eq:F}
+\end{equation}
+The prediction sends the state through \(\vec f\) itself and only the covariance through \(\mat F\):
+\begin{equation}
+  \tilde{\vec x}_n = \vec f(\tilde{\vec x}^+_{n-1}, \vec u_n), \qquad
+  \tilde{\mat P}_n = \mat F\,\tilde{\mat P}^+_{n-1}\,\mat F\T + \mat Q .
+  \label{eq:ekf}
+\end{equation}
+The correction (3.10)--(3.12) stays as it is. Here the GPS measures \(x\) and \(y\), linear:
+\(\mat H = \big(\begin{smallmatrix}1&0&0\\0&1&0\end{smallmatrix}\big)\). A non-linear measurement \(\vec h(\vec x)\)
+would get its Jacobian \(\mat H = \partial \vec h / \partial \vec x\) the same way.
+\end{theory}
+
+\begin{todo}{3.1}
+\datei{models.py}, \thema{motion\_model(x, u, dt)}: \(\vec f\) of \cref{eq:f}.
+\end{todo}
+
+\begin{todo}{3.2}
+\thema{motion\_jacobian(x, u, dt)}: \(\mat F\) of \cref{eq:F}. Derive the two entries by \(\theta\) yourself;
+\thema{pytest -k task3} compares your \(\mat F\) with a numerical derivative of your \(\vec f\).
+\end{todo}
+
+\begin{todo}{3.3}
+\datei{kalman\_filter.py}, \thema{predict\_nonlinear(x\_new, F, Q)}: \cref{eq:ekf}. \thema{x\_new}
+\(= \vec f(\tilde{\vec x}^+_{n-1}, \vec u_n)\) is already computed by the node.
+\end{todo}
+
+\begin{note}
+Given: \thema{input\_noise(x, dt, sigma\_v, sigma\_w)}. \(\mat Q\) is the noise of \(\vec u\) carried into the state,
+\(\mat Q = \mat G \mat M \mat G\T\) with \(\mat M = \operatorname{diag}(\sigma_v^2, \sigma_v^2, \sigma_\omega^2)\)
+and \(\mat G = \partial \vec f / \partial \vec u\). The node predicts with every odometry message and corrects with
+every fix. It starts at the first fix with \(\theta_0 = \) \thema{theta0} and \(\sigma_{\theta 0} = \)
+\thema{sigma\_theta0} (0 and 0.5\,rad).
+\end{note}
+
+\begin{enumerate}
+  \item Start the node. Terminal 2 prints \(\theta\) and its \(\sigma\), the monitor the error of the heading.
+        In RViz the red arrow is now your estimated heading. Run one lap and fill in the first row of
+        \cref{tab:theta}.
+  \item Start with a wrong heading: \thema{-p theta0:=1.5 -p sigma\_theta0:=2.0}, i.\,e.\ 86°. Start the node
+        when the robot enters the lower straight: there it drives along \(x\), \(\theta = 0\), for 16\,s. Note
+        \(\theta\) of terminal 2 after 5, 10 and 15\,s. Then the same with \thema{sigma\_theta0:=0.05}.
+  \item Restart terminal 1 with \thema{gps:=tunnel}: third column of \cref{tab:tunnel}.
+\end{enumerate}
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{The EKF: heading of terminal 2 in degrees, and the monitor after one lap. Fill in.}
+\label{tab:theta}
+\begin{tabular}{@{}p{4.4cm}p{1.4cm}p{1.4cm}p{1.4cm}p{1.6cm}p{1.2cm}p{1.6cm}@{}}
+\toprule
+start & 5\,s & 10\,s & 15\,s & filter in m & NEES & heading \\
+\midrule
+\(\theta_0 = 0\), \(\sigma_{\theta 0} = 0.5\) & & & & & & \\
+\(\theta_0 = 1.5\), \(\sigma_{\theta 0} = 2.0\) & & & & & & \\
+\(\theta_0 = 1.5\), \(\sigma_{\theta 0} = 0.05\) & & & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{itemize}
+  \item The GPS measures only \(x\) and \(y\). How can a fix change \(\theta\)? Look at the third column of
+        \(\mat F\), and at \(\tilde{\mat P}\) after a few prediction steps.
+  \item Why does the start with \(\sigma_{\theta 0} = 0.05\) take so long?
+  \item What happens to \(\sigma_\theta\) while the robot stands at the stop? Why?
+\end{itemize}
+
+\expected[]{task3}
+
+\begin{checkpoint}
+\thema{pytest -k task3} passes. Explain with \(\mat F\) why the heading becomes known only while the robot drives.
+\end{checkpoint}
+
+\newpage
+\section{Task 4: robot\_localization\minutes{25}}
+\label{sec:task4}
 \runningekf{ gps:=tunnel}
 
-ROS has an established Kalman filter: the \thema{ekf\_node} of the package \thema{robot\_localization}, used on
+ROS has an established EKF: the \thema{ekf\_node} of the package \thema{robot\_localization}, used on
 many robots. You do not program it, you configure it, in \datei{config/ekf.yaml}. Stop your node. The launch
 file of terminal 2 starts the \thema{ekf\_node} and a small node that puts its estimate on
 \thema{/muster/kf/pose}: monitor, RViz and \thema{plot\_run.py} work as before.
 
 \begin{note}
 The state of the \thema{ekf\_node} has 15 entries: position, orientation, velocity, angular velocity and
-acceleration in 3D. With \thema{two\_d\_mode} it stays in the plane. The heading is part of the state, so the
-model is non-linear: an EKF (script section 3.1.4). \(\mat R\) of every measurement is the covariance in the message.
+acceleration in 3D. With \thema{two\_d\_mode} it stays in the plane: \(x, y, \theta\), their velocities and
+accelerations, the model of your task 3 with more states. \(\mat R\) of every measurement is the covariance in the
+message.
 \end{note}
 
 \begin{enumerate}
@@ -589,7 +656,7 @@ ros2 topic echo --once /muster/odom --field twist.covariance
 \end{lstlisting}
   \item Start terminal 2. Where does the estimate start in RViz? Run two laps and fill in the first row of
         \cref{tab:ekf}.
-  \item Your filter takes the heading from the odometry. Do the same here: set \thema{yaw} in
+  \item Your filter of task 2 took the heading from the odometry. Do the same here: set \thema{yaw} in
         \thema{odom0\_config} to \thema{true}. Restart terminal 2 only. Second row.
   \item Remove the \thema{\#} in front of \thema{pose0\_rejection\_threshold}. It rejects a fix whose
         Mahalanobis distance is above 3, i.\,e.\ \(d^2 > 9\), your gate of the extra task. Third row. What happens,
@@ -599,13 +666,13 @@ ros2 topic echo --once /muster/odom --field twist.covariance
 
 \begin{table}[ht]\centering
 \renewcommand{\arraystretch}{1.4}
-\caption{Your filter and \thema{robot\_localization} with \thema{gps:=tunnel}. Fill in.}
+\caption{Your EKF and \thema{robot\_localization} with \thema{gps:=tunnel}. Fill in.}
 \label{tab:ekf}
 \begin{tabular}{@{}p{6.0cm}p{2.4cm}p{2.8cm}p{1.8cm}@{}}
 \toprule
 & filter in m & largest error in the tunnel & NEES \\
 \midrule
-your filter, task 2 & & & \\
+your EKF, task 3 & & & \\
 \datei{ekf.yaml} as given & & & \\
 + \thema{yaw} of the odometry & & & \\
 + \thema{pose0\_rejection\_threshold} & & & \\
@@ -617,7 +684,7 @@ your filter, task 2 & & & \\
 \expected[\datei{ekf.yaml} as given; ]{ekf}
 
 \begin{checkpoint}
-What does the \thema{ekf\_node} do that your filter does not? What does your filter do that it does not? Which
+What does the \thema{ekf\_node} do that your EKF does not? What does your EKF do that it does not? Which
 default made it worse here, and how would you notice that on a real robot, without the truth?
 \end{checkpoint}
 

@@ -1,4 +1,4 @@
-"""Lab "Kalman filter", task 3: the EKF of robot_localization instead of your node, on the same topics.
+"""Lab "Kalman filter", task 4: the EKF of robot_localization instead of your node, on the same topics.
 
     ros2 launch ohm_kalman_localization kalman.launch.py                 # terminal 1, as always
     ros2 launch ohm_kalman_localization ekf.launch.py                    # terminal 2, instead of kalman_node.py

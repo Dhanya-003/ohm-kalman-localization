@@ -1,0 +1,6 @@
+t  240.2 s | GPS 0.75 m | filter 0.16 m, max 0.28 m, 4.6x | sigma 0.09 m | NEES 2.0 | heading 1.0 deg
+t  250.2 s | GPS 0.77 m | filter 0.16 m, max 0.28 m, 4.8x | sigma 0.09 m | NEES 1.9 | heading 0.9 deg
+t  260.3 s | GPS 0.78 m | filter 0.14 m, max 0.28 m, 5.7x | sigma 0.09 m | NEES 1.4 | heading 0.7 deg
+t  270.3 s | GPS 0.74 m | filter 0.12 m, max 0.17 m, 6.4x | sigma 0.09 m | NEES 1.0 | heading 0.8 deg
+t  280.3 s | GPS 0.75 m | filter 0.13 m, max 0.24 m, 5.8x | sigma 0.09 m | NEES 1.2 | heading 0.9 deg
+t  290.3 s | GPS 0.72 m | filter 0.12 m, max 0.24 m, 5.9x | sigma 0.09 m | NEES 1.1 | heading 1.0 deg
