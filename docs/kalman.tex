@@ -528,15 +528,105 @@ Explain \cref{tab:tunnel}: what does the filter know about the motion in the tun
 \label{sec:task3}
 \running{}{-p task:=3 -p sigma\_v:=0.2}
 
-Your filter of task 2 takes the heading \(\theta\) from the odometry and trusts it. Now the filter estimates
-\(\theta\) itself. State and input:
+Your filter of task 2 takes the heading \(\theta\) from the odometry and trusts it. If the odometry turned the
+robot by a few degrees too much, every velocity would be rotated wrong, and the GPS would have to pull the estimate
+back again and again. Now the filter estimates \(\theta\) itself. With \(\theta\) in the state the model is no
+longer linear, and the Kalman filter of tasks 1 and 2 no longer applies. This task first explains the extended
+Kalman filter (EKF), then you implement it.
+
+\subsection*{Why a linear model is needed}
+The Kalman filter rests on one property: a normal distribution sent through a linear function
+\(\vec x \mapsto \mat A \vec x\) is again a normal distribution, with the mean \(\mat A \vec x\) and the
+covariance \(\mat A \mat P \mat A\T\) (script, note under 3.8). Mean and covariance describe it completely.
+
+With the heading in the state this fails. Example: the robot stands at the origin, its heading is uncertain,
+\(\theta \sim \mathcal N(0, \sigma_\theta^2)\), and it drives \(d = 3\)\,m straight ahead. It ends at
+\((d\cos\theta,\ d\sin\theta)\): on a circular arc, not in an ellipse (\cref{fig:banana}). The mean of the arc is not
+even at \((d, 0)\), it lies closer to the start, because \(\cos\theta < 1\) for every \(\theta \neq 0\).
+
+\begin{figure}[ht]
+  \centering
+  \input{figures/banana.tikz}
+  \caption{A heading uncertainty of \(\sigma_\theta = 0.45\)\,rad (26°), driven 3\,m straight ahead. Grey: 400 samples,
+    they lie on an arc. Black: their mean. Red: what the EKF makes of it, the mean through \(\vec f\) and the
+    \(2\sigma\) ellipse of \(\mat F \mat P \mat F\T\). The smaller \(\sigma_\theta\), the better the ellipse fits the arc.}
+  \label{fig:banana}
+\end{figure}
+
+\subsection*{Linearization}
+The EKF replaces the non-linear function by its tangent at the current estimate \(\hat x\), the Taylor series up to
+the first derivative:
+\begin{equation}
+  f(x) \approx f(\hat x) + f'(\hat x)\,(x - \hat x) .
+  \label{eq:taylor}
+\end{equation}
+Close to \(\hat x\) this is a straight line, and a straight line keeps a normal distribution normal:
+\(\mathcal N(\hat x, \sigma^2)\) becomes \(\mathcal N\big(f(\hat x),\ f'(\hat x)^2 \sigma^2\big)\). The mean goes
+through \(f\) itself, the standard deviation is scaled by the slope. Example: \(y = d \sin\theta\) with \(d = 3\)\,m at
+\(\hat\theta = 0\). The slope is \(f'(0) = d\cos 0 = 3\)\,m, so \(\sigma_\theta = 0.1\)\,rad becomes
+\(\sigma_y \approx 0.3\)\,m.
+
+With several inputs and outputs the slope becomes a matrix, the \emph{Jacobian}: row \(i\) belongs to output
+\(f_i\), column \(j\) to input \(x_j\),
+\begin{equation}
+  \mat J = \frac{\partial \vec f}{\partial \vec x} , \qquad J_{ij} = \frac{\partial f_i}{\partial x_j} .
+  \label{eq:jacobian}
+\end{equation}
+A partial derivative \(\partial f_i / \partial x_j\) is the ordinary derivative by \(x_j\), with all other variables
+held constant. Example: a laser beam of length \(r\) at the angle \(\varphi\) ends at
+\begin{equation*}
+  \vec h(r, \varphi) = \begin{pmatrix} r\cos\varphi \\ r\sin\varphi \end{pmatrix} , \qquad
+  \mat J = \begin{pmatrix}
+    \partial h_1/\partial r & \partial h_1/\partial\varphi \\
+    \partial h_2/\partial r & \partial h_2/\partial\varphi
+  \end{pmatrix}
+  = \begin{pmatrix} \cos\varphi & -r\sin\varphi \\ \sin\varphi & r\cos\varphi \end{pmatrix} .
+\end{equation*}
+\(\mat J\) depends on where it is evaluated: it is the slope at one point. Near that point
+\(\vec f(\vec x) \approx \vec f(\hat{\vec x}) + \mat J\,(\vec x - \hat{\vec x})\), and the covariance is carried like
+with \(\mat A\): \(\mat J \mat P \mat J\T\).
+
+\begin{theory}{The extended Kalman filter (EKF)}
+The model and the measurement may be non-linear functions,
+\(\vec x_n = \vec f(\vec x_{n-1}, \vec u_n)\) and \(\vec y_n = \vec h(\vec x_n)\). The EKF uses the functions for the
+state and their Jacobians for the covariance:
+\begin{center}
+\renewcommand{\arraystretch}{1.5}
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+& Kalman filter & extended Kalman filter \\
+\midrule
+state & \(\tilde{\vec x}_n = \mat A \tilde{\vec x}^+_{n-1} + \mat B \hat{\vec u}_n\)
+      & \(\tilde{\vec x}_n = \vec f(\tilde{\vec x}^+_{n-1}, \hat{\vec u}_n)\) \\
+covariance & \(\tilde{\mat P}_n = \mat A \tilde{\mat P}^+_{n-1} \mat A\T + \mat Q\)
+           & \(\tilde{\mat P}_n = \mat F \tilde{\mat P}^+_{n-1} \mat F\T + \mat Q\) \\
+predicted measurement & \(\tilde{\vec y}_n = \mat H \tilde{\vec x}_n\) & \(\tilde{\vec y}_n = \vec h(\tilde{\vec x}_n)\) \\
+gain, state, covariance & (3.10)--(3.12) & (3.10)--(3.12) \\
+matrices & \(\mat A\), \(\mat H\): constant
+         & \(\mat F = \partial \vec f / \partial \vec x\) at \(\tilde{\vec x}^+_{n-1}, \hat{\vec u}_n\);
+           \(\mat H = \partial \vec h / \partial \vec x\) at \(\tilde{\vec x}_n\) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+Three rules:
+\begin{itemize}
+  \item The state always goes through \(\vec f\) and \(\vec h\) themselves. Only the covariance uses \(\mat F\) and
+        \(\mat H\).
+  \item \(\mat F\) belongs to the \emph{old} estimate \(\tilde{\vec x}^+_{n-1}\): compute it before the state is
+        overwritten.
+  \item The EKF is an approximation. It is good while the uncertainty is small against the curvature of
+        \(\vec f\) (\cref{fig:banana}). A large error of the heading is such a case.
+\end{itemize}
+\end{theory}
+
+\subsection*{The model of the robot}
+State and input:
 \begin{equation*}
   \vec x = \begin{pmatrix} x \\ y \\ \theta \end{pmatrix}, \qquad
   \vec u = \begin{pmatrix} v_x^R \\ v_y^R \\ \omega \end{pmatrix} \quad\text{(the odometry, frame of the robot).}
 \end{equation*}
-The odometry is no longer a measurement. It is the input \(\vec u\) of the model, the \(\mat B \hat{\vec u}_n\) of
-(3.6). Over \(\Delta t\) seconds the robot moves by its velocity, rotated into the world frame, and turns by
-\(\omega\,\Delta t\):
+The odometry is no longer a measurement. It is the input \(\hat{\vec u}_n\) of the model, the input of (3.6). Over
+\(\Delta t\) seconds the robot moves by its velocity, rotated into the world frame, and turns by \(\omega\,\Delta t\):
 \begin{equation}
   \vec f(\vec x, \vec u) =
   \begin{pmatrix}
@@ -546,51 +636,55 @@ The odometry is no longer a measurement. It is the input \(\vec u\) of the model
   \end{pmatrix} .
   \label{eq:f}
 \end{equation}
-
-\begin{theory}{The extended Kalman filter (EKF)}
-\Cref{eq:f} contains \(\cos\theta\) and \(\sin\theta\): it cannot be written as \(\mat A \vec x\). A normal
-distribution sent through \(\vec f\) is no longer normal, and there is no \(\mat A\) for the covariance. The EKF
-linearizes \(\vec f\) at the current estimate, with the Jacobian, the matrix of all first derivatives:
+Its Jacobian, \cref{eq:jacobian} applied to \cref{eq:f}: \(x\) appears only in \(f_1\), with factor 1, \(y\)
+only in \(f_2\), \(\theta\) in all three rows:
 \begin{equation}
-  \mat F = \frac{\partial \vec f}{\partial \vec x}\bigg|_{\tilde{\vec x}^+_{n-1},\,\vec u_n}
+  \mat F = \frac{\partial \vec f}{\partial \vec x}
   = \begin{pmatrix}
-      1 & 0 & \partial f_x / \partial\theta \\
-      0 & 1 & \partial f_y / \partial\theta \\
+      1 & 0 & \partial f_1 / \partial\theta \\
+      0 & 1 & \partial f_2 / \partial\theta \\
       0 & 0 & 1
     \end{pmatrix} .
   \label{eq:F}
 \end{equation}
-The prediction sends the state through \(\vec f\) itself and only the covariance through \(\mat F\):
-\begin{equation}
-  \tilde{\vec x}_n = \vec f(\tilde{\vec x}^+_{n-1}, \vec u_n), \qquad
-  \tilde{\mat P}_n = \mat F\,\tilde{\mat P}^+_{n-1}\,\mat F\T + \mat Q .
-  \label{eq:ekf}
-\end{equation}
-The correction (3.10)--(3.12) stays as it is. Here the GPS measures \(x\) and \(y\), linear:
-\(\mat H = \big(\begin{smallmatrix}1&0&0\\0&1&0\end{smallmatrix}\big)\). A non-linear measurement \(\vec h(\vec x)\)
-would get its Jacobian \(\mat H = \partial \vec h / \partial \vec x\) the same way.
-\end{theory}
+The two entries \(\partial f_1/\partial\theta\) and \(\partial f_2/\partial\theta\) you derive yourself (3.2).
+
+\paragraph{Process noise.} The model itself is exact; what is uncertain is the input. The odometry velocity has the
+standard deviation \(\sigma_v\), the turn rate \(\sigma_\omega\):
+\(\mat M = \operatorname{diag}(\sigma_v^2, \sigma_v^2, \sigma_\omega^2)\). This noise reaches the state through the
+Jacobian by the input, \(\mat G = \partial \vec f / \partial \vec u\): a velocity error of 0.1\,m/s moves the
+position by \(0.1\,\Delta t\) in the direction the robot is heading. So \(\mat Q = \mat G \mat M \mat G\T\). It is given:
+\thema{input\_noise(x, dt, sigma\_v, sigma\_w)}. As in task 2, \(\sigma_v\) has to cover the 3\,\% error of the
+odometry, not only its noise.
+
+\paragraph{Correction.} The GPS measures \(x\) and \(y\): \(\vec h(\vec x) = (x, y)\T\), linear,
+\(\mat H = \big(\begin{smallmatrix}1&0&0\\0&1&0\end{smallmatrix}\big)\). Your \thema{correct} of task 1 stays as it is.
+
+\subsection*{How a fix finds the heading}
+The GPS measures only \(x\) and \(y\), and still the heading improves. The third column of \(\mat F\) carries an
+error of \(\theta\) into \(x\) and \(y\). After a few prediction steps \(\tilde{\mat P}\) has the entries
+\(P_{x\theta}\) and \(P_{y\theta}\): an error of the heading and an error of the position go together. Then the gain
+\(\mat K = \tilde{\mat P} \mat H\T \mat S^{-1}\) has a third row, and every innovation of \(x\) and \(y\) also corrects
+\(\theta\). It is the same mechanism as in the covariance ellipse of the script: measuring only \(x\) also sharpens \(v\).
 
 \begin{todo}{3.1}
 \datei{models.py}, \thema{motion\_model(x, u, dt)}: \(\vec f\) of \cref{eq:f}.
 \end{todo}
 
 \begin{todo}{3.2}
-\thema{motion\_jacobian(x, u, dt)}: \(\mat F\) of \cref{eq:F}. Derive the two entries by \(\theta\) yourself;
-\thema{pytest -k task3} compares your \(\mat F\) with a numerical derivative of your \(\vec f\).
+\thema{motion\_jacobian(x, u, dt)}: \(\mat F\) of \cref{eq:F}. Derive \(\partial f_1/\partial\theta\) and
+\(\partial f_2/\partial\theta\) as in the laser example; \thema{pytest -k task3} compares your \(\mat F\) with a
+numerical derivative of your \(\vec f\).
 \end{todo}
 
 \begin{todo}{3.3}
-\datei{kalman\_filter.py}, \thema{predict\_nonlinear(x\_new, F, Q)}: \cref{eq:ekf}. \thema{x\_new}
-\(= \vec f(\tilde{\vec x}^+_{n-1}, \vec u_n)\) is already computed by the node.
+\datei{kalman\_filter.py}, \thema{predict\_nonlinear(x\_new, F, Q)}: the prediction of the EKF, state and covariance. \thema{x\_new}
+\(= \vec f(\tilde{\vec x}^+_{n-1}, \hat{\vec u}_n)\) is already computed by the node.
 \end{todo}
 
 \begin{note}
-Given: \thema{input\_noise(x, dt, sigma\_v, sigma\_w)}. \(\mat Q\) is the noise of \(\vec u\) carried into the state,
-\(\mat Q = \mat G \mat M \mat G\T\) with \(\mat M = \operatorname{diag}(\sigma_v^2, \sigma_v^2, \sigma_\omega^2)\)
-and \(\mat G = \partial \vec f / \partial \vec u\). The node predicts with every odometry message and corrects with
-every fix. It starts at the first fix with \(\theta_0 = \) \thema{theta0} and \(\sigma_{\theta 0} = \)
-\thema{sigma\_theta0} (0 and 0.5\,rad).
+The node predicts with every odometry message and corrects with every fix. It starts at the first fix with
+\(\theta_0 = \) \thema{theta0} and \(\sigma_{\theta 0} = \) \thema{sigma\_theta0} (0 and 0.5\,rad).
 \end{note}
 
 \begin{enumerate}
@@ -619,10 +713,12 @@ start & 5\,s & 10\,s & 15\,s & filter in m & NEES & heading \\
 \end{table}
 
 \begin{itemize}
-  \item The GPS measures only \(x\) and \(y\). How can a fix change \(\theta\)? Look at the third column of
-        \(\mat F\), and at \(\tilde{\mat P}\) after a few prediction steps.
-  \item Why does the start with \(\sigma_{\theta 0} = 0.05\) take so long?
-  \item What happens to \(\sigma_\theta\) while the robot stands at the stop? Why?
+  \item Write down \(\mat F\) for the robot on the lower straight (\(\theta = 0\), \(v_x^R = 0.5\)\,m/s,
+        \(\Delta t = 0.02\)\,s). Which entries of \(\tilde{\mat P}\) does it couple?
+  \item Why does the start with \(\sigma_{\theta 0} = 0.05\) take so long? Look at the third row of \(\mat K\).
+  \item What happens to \(\sigma_\theta\) while the robot stands at the stop? Why? Look at \(\mat F\) for
+        \(\vec u = 0\).
+  \item The start 86° off is far outside \cref{fig:banana}. Why does the EKF still find the heading?
 \end{itemize}
 
 \expected[]{task3}
