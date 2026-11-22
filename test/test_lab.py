@@ -16,7 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from ohm_kalman_localization import paths, route                 # noqa: E402
 
-CONFIGS = ("open", "tunnel", "multipath")
+CONFIGS = ("open", "tunnel")
 
 
 def config(name):
@@ -54,14 +54,12 @@ def test_every_config_drives_the_same_loop_with_the_same_gps(name):
 
 
 def test_the_zones_lie_on_the_loop():
-    tunnel, multipath = config("multipath")["gps"]["zones"]
-    assert config("tunnel")["gps"]["zones"] == [tunnel] and config("open")["gps"]["zones"] == []
+    (tunnel,) = config("tunnel")["gps"]["zones"]
+    assert config("open")["gps"]["zones"] == []
     inside = on_loop(tunnel["rect"])
     assert tunnel["block"] and len(inside) * 0.05 == pytest.approx(6.6, abs=0.1)             # corner, 6.6 m
     x0, y0, x1, y1 = tunnel["rect"]
     assert x0 < route.STOP[0] < x1 and y0 < route.STOP[1] < y1                                # the stop is inside
-    inside = on_loop(multipath["rect"])
-    assert all(p[0] == pytest.approx(21.0) for p in inside) and len(inside) * 0.05 > 2.5   # right straight
     assert on_loop([route.STOP[0] - 0.5, route.STOP[1] - 0.5, route.STOP[0] + 0.5, route.STOP[1] + 0.5])
 
 
@@ -80,8 +78,8 @@ def test_the_simulator_reads_the_config(name):
 def test_the_monitor_finds_the_zones_and_the_plot_finds_the_outages(tmp_path):
     pytest.importorskip("rclpy")
     monitor = load("nodes/monitor_node.py")
-    zones = monitor.load_zones(paths.lab_file("config", "multipath.json"))
-    assert [z["name"] for z in zones] == ["tunnel", "multipath"] and zones[0]["block"]
+    zones = monitor.load_zones(paths.lab_file("config", "tunnel.json"))
+    assert [z["name"] for z in zones] == ["tunnel"] and zones[0]["block"]
     assert monitor.inside(zones[0], *route.STOP) and not monitor.inside(zones[0], *route.START[:2])
     plot = load("nodes/plot_run.py")
     run = tmp_path / "task1.csv"

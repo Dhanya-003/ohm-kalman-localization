@@ -47,7 +47,6 @@ PARAMETERS = {
     "theta0": 0.0,              # rad: initial heading of task 3
     "sigma_theta0": 0.5,        # rad: its initial standard deviation
     "sigma_v0": 1.0,            # m/s: initial standard deviation of the velocity
-    "gate": 0.0,                # extra task Z.1: reject a fix with d^2 above this, 0 = off
     "rate": 10.0,               # Hz: prediction steps and reports between two fixes
 }
 RESTART = 5.0                   # s: a longer step (or a step back) means the simulator was restarted
@@ -60,7 +59,7 @@ class KalmanNode(Node):
         self.p = {name: self.declare_parameter(name, value).value for name, value in PARAMETERS.items()}
         robot, self.task = self.p["robot"], int(self.p["task"])
         self.kf, self.t, self.u = None, 0.0, (0.0, 0.0, 0.0)
-        self.fixes, self.rejected, self.k_gps, self.last_log = 0, 0, 0.0, -1e9
+        self.fixes, self.k_gps, self.last_log = 0, 0.0, -1e9
         self.create_subscription(PoseWithCovarianceStamped, f"/{robot}/gps_cov", self.on_gps, 10)
         if self.task >= 2:
             self.create_subscription(Odometry, f"/{robot}/odom", self.on_odom, 50)
@@ -72,7 +71,6 @@ class KalmanNode(Node):
         noise = f"sigma_a {self.p['sigma_a']} m/s^2" if self.task < 3 else f"sigma_w {self.p['sigma_w']} rad/s"
         self.get_logger().info(f"task {self.task} ({sensors}), {noise}"
                                + (f", sigma_v {self.p['sigma_v']} m/s" if self.task >= 2 else "")
-                               + (f", gate {self.p['gate']}" if self.p["gate"] else "")
                                + f"; waiting for the first fix on /{robot}/gps_cov")
 
     # ------------------------------------------------------------------ time
@@ -117,10 +115,8 @@ class KalmanNode(Node):
         if not self.advance(t):
             return
         self.fixes += 1
-        if self.kf.correct(z, H, R, float(self.p["gate"])):
-            self.k_gps = float(self.kf.K[0, 0])
-        else:
-            self.rejected += 1
+        self.kf.correct(z, H, R)
+        self.k_gps = float(self.kf.K[0, 0])
         if self.task == 3:
             self.kf.x[2] = math.atan2(math.sin(self.kf.x[2]), math.cos(self.kf.x[2]))
 
@@ -165,7 +161,7 @@ class KalmanNode(Node):
         twist.twist.covariance = cov6(velocity_cov)
         self.pub_twist.publish(twist)
         info = {"task": self.task, "sigma_a": self.p["sigma_a"], "sigma_v": self.p["sigma_v"],
-                "gate": self.p["gate"], "fixes": self.fixes, "rejected": self.rejected, "k_gps": self.k_gps}
+                "fixes": self.fixes, "k_gps": self.k_gps}
         if ekf:
             info.update(sigma_w=self.p["sigma_w"], theta0=self.p["theta0"], sigma_theta0=self.p["sigma_theta0"])
         self.pub_info.publish(String(data=json.dumps(info)))
@@ -176,8 +172,7 @@ class KalmanNode(Node):
                      else f"v ({x[2]:5.2f}, {x[3]:5.2f}) m/s")
             self.get_logger().info(
                 f"t {self.t:6.1f} s | x ({x[0]:6.2f}, {x[1]:6.2f}) m | {state} | "
-                f"sigma {sigma:.2f} m | K {self.k_gps:.2f} | fixes {self.fixes}"
-                + (f" ({self.rejected} rejected)" if self.p["gate"] else ""))
+                f"sigma {sigma:.2f} m | K {self.k_gps:.2f} | fixes {self.fixes}")
 
 
 def stamp(msg) -> float:

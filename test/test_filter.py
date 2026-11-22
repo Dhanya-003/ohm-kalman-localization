@@ -3,7 +3,6 @@
     python3 -m pytest test/test_filter.py -q -k task1
     python3 -m pytest test/test_filter.py -q -k task2
     python3 -m pytest test/test_filter.py -q -k task3
-    python3 -m pytest test/test_filter.py -q -k extra
 """
 import math
 import os
@@ -58,7 +57,7 @@ def test_task1_2_predict_moves_the_state_and_lets_P_grow():
 def test_task1_3_4_correct_is_the_example_of_the_script():
     # script, figure of the covariance ellipse: P = [2.56 1.2; 1.2 1.0], only x measured with sigma 0.6
     f = KF.KalmanFilter([0.0, 0.0], [[2.56, 1.2], [1.2, 1.0]])
-    assert f.correct([1.0], np.array([[1.0, 0.0]]), np.array([[0.36]]))
+    f.correct([1.0], np.array([[1.0, 0.0]]), np.array([[0.36]]))
     assert f.K[:, 0] == pytest.approx([0.877, 0.411], abs=1e-3)                       # STUDENT 1.3
     assert f.x == pytest.approx([0.877, 0.411], abs=1e-3)                             # STUDENT 1.4
     assert f.P == pytest.approx(np.array([[0.3156, 0.1479], [0.1479, 0.5068]]), abs=1e-4)
@@ -172,18 +171,3 @@ def test_task3_the_ekf_finds_a_wrong_heading_from_gps_alone():
     assert abs(math.degrees(f.x[2] - heading)) < 3.0
     assert math.dist(f.x[:2], pose[:2]) < 0.4
 
-
-# ------------------------------------------------------------------ extra task
-
-def test_extra_1_mahalanobis_distance():
-    assert KF.mahalanobis2(np.array([1.0, 0.0]), np.diag([0.25, 0.25])) == pytest.approx(4.0)
-    assert KF.mahalanobis2(np.array([0.3, -0.4]), np.eye(2)) == pytest.approx(0.25)
-
-
-def test_extra_1_the_gate_rejects_a_fix_far_off_and_keeps_a_close_one():
-    f = KF.KalmanFilter([0.0, 0.0, 0.0, 0.0], np.diag([0.01, 0.01, 0.01, 0.01]))
-    z, H, R = M.gps_measurement(gps_msg(3.0, 0.0, 0.25, 0.25))
-    assert not f.correct(z, H, R, gate=9.21)
-    assert f.x == pytest.approx([0.0, 0.0, 0.0, 0.0])
-    z, H, R = M.gps_measurement(gps_msg(0.5, 0.0, 0.25, 0.25))
-    assert f.correct(z, H, R, gate=9.21) and f.x[0] > 0.0

@@ -87,7 +87,7 @@ def ask(block: str, seen: dict, now: float, data: dict, root: str = ROOT, wait: 
     if egg:
         left = math.ceil(wait - (now - times[-1]))
         out.append("\n" + indent(data["eggs"][egg].format(
-            block=block, test="extra" if block.startswith("Z") else "task" + block.split(".")[0],
+            block=block, test="task" + block.split(".")[0],
             level=len(times) + 1, previous=len(times), wait=f"{left // 60}:{left % 60:02d} min"), 2))
         return "\n".join(out)
     seen[block] = times = times + [now]

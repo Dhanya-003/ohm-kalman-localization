@@ -20,13 +20,13 @@ from . import paths
 
 ARGS = [
     ("robot", "muster", "robot name"),
-    ("gps", "open", "GPS: open (everywhere) | tunnel (no fix in the upper left corner) | multipath (and a bias)"),
+    ("gps", "open", "GPS: open (everywhere) | tunnel (no fix in the upper left corner)"),
     ("speed", "0.5", "speed of the driver along the loop, m/s"),
     ("rviz", "auto", "RViz 2 with the lab's view: auto | true | false"),
     ("headless", "false", "without the window (SDL dummy driver)"),
     ("seconds", "", "end after N s of simulation time (empty = until Ctrl-C)"),
 ]
-CONFIGS = ("open", "tunnel", "multipath")
+CONFIGS = ("open", "tunnel")
 NODE = "ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1"
 
 

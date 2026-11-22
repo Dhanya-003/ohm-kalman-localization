@@ -97,8 +97,6 @@ def test_no_second_hint_before_a_try(tmp_path):
     out = hints.ask("1.3", seen, 1000.0 + 10 * hints.WAIT, DATA, root)
     assert DATA["eggs"]["untouched"].split("\n")[0] in out and "-k task1" in out
     assert level("1.3", 1) not in out and len(seen["1.3"]) == 1
-    assert "-k extra" in hints.ask("Z.1", {"Z.1": [0.0]}, 1e9, DATA, make_root(tmp_path / "z", EMPTY.replace(
-        "1.3", "Z.1")))
 
 
 def test_the_command_line_keeps_the_state(tmp_path, monkeypatch, capsys):

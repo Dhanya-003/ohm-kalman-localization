@@ -1,7 +1,7 @@
 """The loop the robot drives in the hall `open` (30 x 20 m): a rounded rectangle, counter-clockwise.
 
     lower straight   y = 7,  x 10 -> 20   (the start, heading 0)
-    right straight   x = 21, y 8 -> 12    (multipath zone in config/multipath.json)
+    right straight   x = 21, y 8 -> 12
     upper straight   y = 13, x 20 -> 10   (the tunnel of config/tunnel.json begins at x = 12)
     left straight    x = 9,  y 12 -> 8    (the robot stops at y = 10 every lap, still in the tunnel)
 

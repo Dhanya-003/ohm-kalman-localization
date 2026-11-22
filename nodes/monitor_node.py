@@ -12,7 +12,7 @@ Every `period` s one line over the last `window` s of simulation time:
     NEES    mean of e^T P^-1 e / 2 over the estimates: about 1 if sigma is honest, > 1 overconfident
     heading RMS error of the heading, for an estimate with a heading of its own (the EKF of task 3)
 
-and after every pass through a GPS zone of the config (tunnel, multipath) its largest error and sigma. Each run of
+and after every pass through a GPS zone of the config (the tunnel) its largest error and sigma. Each run of
 your node (a new start of kalman_node.py) is written to runs/<task>_<settings>_<time>.csv for plot_run.py.
 RViz gets the true path, the estimated path, the fixes and the zones on /<robot>/kalman_lab/*.
 """
@@ -214,8 +214,6 @@ class MonitorNode(Node):
                 name += f"_theta{i.get('theta0')}_s{i.get('sigma_theta0')}"
         elif i.get("task", 1) >= 2:
             name += f"_v{i.get('sigma_v', 0)}"
-        if i.get("gate"):
-            name += f"_gate{i.get('gate')}"
         folder = paths.lab_file("runs")
         os.makedirs(folder, exist_ok=True)
         self.file = open(os.path.join(folder, f"{name}_{time.strftime('%H%M%S')}.csv"), "w", newline="")

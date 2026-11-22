@@ -35,13 +35,11 @@ class KalmanFilter:
         # TODO STUDENT 3.3
         raise NotImplementedError("STUDENT 3.3")
 
-    def correct(self, z, H, R, gate=0.0):
-        """Correction with one measurement. False if the gate (extra task Z.1) rejects it."""
+    def correct(self, z, H, R):
+        """Correction with one measurement."""
         z = np.asarray(z, dtype=float)
         innovation = z - H @ self.x                # measured minus predicted measurement
         S = H @ self.P @ H.T + R                   # its covariance, the bracket of the gain
-        if gate > 0.0 and mahalanobis2(innovation, S) > gate:
-            return False
         # the gain: how much of the innovation goes into the state
         # TODO STUDENT 1.3
         raise NotImplementedError("STUDENT 1.3")
@@ -50,12 +48,3 @@ class KalmanFilter:
         raise NotImplementedError("STUDENT 1.4")
         self.P = 0.5 * (self.P + self.P.T)          # keeps P symmetric against rounding
         self.K = K
-        return True
-
-
-def mahalanobis2(innovation, S):
-    """Extra task Z.1: the squared Mahalanobis distance of the innovation, whose covariance is S."""
-    # the innovation in units of its own uncertainty: innovation transposed, times S inverse, times innovation
-    # TODO STUDENT Z.1
-    raise NotImplementedError("STUDENT Z.1")
-    return d2
