@@ -1,6 +1,8 @@
 """The Kalman filter of the lab: prediction and correction, the same equations for every sensor.
 
-    x   state, numpy vector of n numbers        here (x, y, vx, vy), world frame
+predict is the linear prediction of tasks 1 and 2, predict_nonlinear the one of the EKF in task 3.
+
+    x   state, numpy vector of n numbers        (x, y, vx, vy) in tasks 1 and 2, (x, y, theta) in task 3
     P   covariance of the state, n x n
     A   state transition matrix, n x n          Q  process noise, n x n
     z   measurement, m numbers                  H  observation matrix, m x n    R  measurement noise, m x m
@@ -26,6 +28,12 @@ class KalmanFilter:
         # the state through the model (no input B u here), then the covariance through the model plus Q
         # TODO STUDENT 1.2
         raise NotImplementedError("STUDENT 1.2")
+
+    def predict_nonlinear(self, x_new, F, Q):
+        """EKF prediction (task 3): the state through the non-linear model, the covariance through its Jacobian."""
+        # x_new = f(x, u) is already computed: take it as the state; the covariance as in predict, with F for A
+        # TODO STUDENT 3.3
+        raise NotImplementedError("STUDENT 3.3")
 
     def correct(self, z, H, R, gate=0.0):
         """Correction with one measurement. False if the gate (extra task Z.1) rejects it."""

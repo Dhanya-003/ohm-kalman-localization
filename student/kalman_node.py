@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lab "Kalman filter": the node around your filter — where the robot is, from GPS and odometry.
+"""Lab "Kalman filter": the node that runs your filter on GPS and odometry.
 
     ros2 launch ohm_kalman_localization kalman.launch.py                          # terminal 1
     ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1        # terminal 2

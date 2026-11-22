@@ -1,4 +1,4 @@
-% Lab 3 of Intelligent Robotics (ASY2): a linear Kalman filter that finds a driving robot from GPS and odometry.
+% Lab 3 of Intelligent Robotics (ASY2): Kalman filter and EKF that localize a driving robot from GPS and odometry.
 % Build: make  (latexmk -pdf). Figures are TikZ files in figures/, made by tools/make_figures.py.
 \documentclass[11pt,a4paper,parskip=half]{scrartcl}
 \usepackage[english]{babel}
@@ -45,7 +45,7 @@
 
 \newcommand{\thema}[1]{\texttt{#1}}
 \newcommand{\datei}[1]{\texttt{#1}}
-\newcommand{\minutes}[1]{\hfill{\normalsize\mdseries\color{ohmgrey}\faClock[regular]~#1 min}}
+\newcommand{\minutes}[1]{\texorpdfstring{\hfill{\normalsize\mdseries\color{ohmgrey}\faClock[regular]~#1 min}}{}}
 \newcommand{\mat}[1]{\mathbf{#1}}
 \newcommand{\T}{^{\mathsf{T}}}
 
@@ -78,7 +78,7 @@
     terminal 2 & \texttt{ros2 run ohm\_kalman\_localization kalman\_node.py -\kern0pt-ros-args #2}
   \end{tabularx}
 \end{tcolorbox}}
-% \runningekf{<launch arguments>}: task 3, terminal 2 starts robot_localization instead of your node
+% \runningekf{<launch arguments>}: task 4, terminal 2 starts robot_localization instead of your node
 \newcommand{\runningekf}[1]{\begin{tcolorbox}[base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
         title={\faTerminal~Running}, coltitle=ohmgrey, colbacktitle=black!3, fonttitle=\small\bfseries,
         toptitle=2pt, bottomtitle=0pt, fontupper=\small]
@@ -121,7 +121,7 @@
 
 \section{Overview}
 A robot drives a loop on an open field (\cref{fig:field}). A given node steers it. Your node estimates
-where the robot is. It has two sensors:
+where the robot is. The robot has two sensors:
 \begin{itemize}
   \item \textbf{GPS}: 5 fixes per second, \(\sigma = 0.5\)\,m in \(x\) and \(y\), no drift. No fix in the tunnel.
   \item \textbf{Odometry}: 50 messages per second. Good velocity, drifting position.
@@ -172,7 +172,7 @@ min & task & done when \\
 script & code & \\
 \midrule
 \(\tilde{\vec x}_n\), \(\tilde{\vec x}_n^+\) & \thema{self.x} & state before and after the correction \\
-\(\tilde{\mat P}_n\), \(\tilde{\mat P}_n^+\) & \thema{self.P} & its covariance, \(4 \times 4\) \\
+\(\tilde{\mat P}_n\), \(\tilde{\mat P}_n^+\) & \thema{self.P} & its covariance, \(n \times n\) \\
 \(\mat A\), \(\mat Q\) & \thema{A}, \thema{Q} & model and process noise of one step of \(\Delta t\) = \thema{dt} seconds \\
 \(\hat{\vec y}_n\) & \thema{z} & the measurement \\
 \(\hat{\vec y}_n - \tilde{\vec y}_n\) & \thema{innovation} & measured minus predicted measurement \\
@@ -185,7 +185,7 @@ Everything is in metres and seconds, in the world frame \thema{map}.
 \newpage
 \section{Getting started}
 \paragraph{Your own copy.} Fork \datei{ohm-kalman-localization} on GitHub (button \emph{Fork} at the top
-right), then clone your fork into the \datei{src/} folder of your workspace. Update the simulator:
+right), then clone your fork into the \datei{src/} folder of your workspace and update the simulator:
 \begin{lstlisting}
 git clone git@github.com:<your-name>/ohm-kalman-localization.git
 \end{lstlisting}
@@ -194,7 +194,7 @@ git -C ir-mecanum-lab pull
 \end{lstlisting}
 Commit after every task and push, so nothing is lost at the end of the session.
 
-\paragraph{Build.} Task 3 needs the package \thema{robot\_localization}:
+\paragraph{Build.} Task 4 needs the package \thema{robot\_localization}:
 \begin{lstlisting}
 sudo apt install ros-jazzy-robot-localization
 \end{lstlisting}
@@ -387,7 +387,6 @@ over the step: per axis \(\mat Q = \sigma_a^2 \, \vec g \vec g\T\) with \(\vec g
 The node uses \(\sigma_a = 0.3\)\,m/s\(^2\): the robot brakes and starts with 0.3\,m/s\(^2\).
 \end{note}
 
-
 \thema{pytest -k task1} also tries two examples of the script: the covariance ellipse (\(\tilde{\mat P} =
 \big(\begin{smallmatrix}2.56 & 1.2\\ 1.2 & 1.0\end{smallmatrix}\big)\), only \(x\) measured with
 \(\sigma = 0.6\), gives \(\mat K = (0.877,\ 0.411)\T\)), and the worked example (after 100 fixes the velocity is
@@ -528,21 +527,21 @@ Explain \cref{tab:tunnel}: what does the filter know about the motion in the tun
 \label{sec:task3}
 \running{}{-p task:=3 -p sigma\_v:=0.2}
 
-Your filter of task 2 takes the heading \(\theta\) from the odometry and trusts it. If the odometry turned the
-robot by a few degrees too much, every velocity would be rotated wrong, and the GPS would have to pull the estimate
-back again and again. Now the filter estimates \(\theta\) itself. With \(\theta\) in the state the model is no
-longer linear, and the Kalman filter of tasks 1 and 2 no longer applies. This task first explains the extended
-Kalman filter (EKF), then you implement it.
+The filter of task 2 takes the heading \(\theta\) from the odometry without checking it. A heading error of a
+few degrees rotates every velocity measurement, and only the GPS pulls the estimate back. In task 3 the filter
+estimates \(\theta\) itself. With \(\theta\) in the state the model is non-linear, and the Kalman filter of
+tasks 1 and 2 does not apply. The following pages derive the extended Kalman filter (EKF) from it.
 
 \subsection*{Why a linear model is needed}
-The Kalman filter rests on one property: a normal distribution sent through a linear function
-\(\vec x \mapsto \mat A \vec x\) is again a normal distribution, with the mean \(\mat A \vec x\) and the
-covariance \(\mat A \mat P \mat A\T\) (script, note under 3.8). Mean and covariance describe it completely.
+The Kalman filter relies on one property: a normal distribution mapped by a linear function
+\(\vec x \mapsto \mat A \vec x\) is again a normal distribution, with mean \(\mat A \vec x\) and
+covariance \(\mat A \mat P \mat A\T\). Mean and covariance describe it completely, so the filter only has to
+carry these two.
 
 With the heading in the state this fails. Example: the robot stands at the origin, its heading is uncertain,
 \(\theta \sim \mathcal N(0, \sigma_\theta^2)\), and it drives \(d = 3\)\,m straight ahead. It ends at
-\((d\cos\theta,\ d\sin\theta)\): on a circular arc, not in an ellipse (\cref{fig:banana}). The mean of the arc is not
-even at \((d, 0)\), it lies closer to the start, because \(\cos\theta < 1\) for every \(\theta \neq 0\).
+\((d\cos\theta,\ d\sin\theta)\): on a circular arc, not in an ellipse (\cref{fig:banana}). The mean of the samples lies
+closer to the start than \((d, 0)\), because \(\cos\theta < 1\) for every \(\theta \neq 0\).
 
 \begin{figure}[ht]
   \centering
@@ -583,7 +582,7 @@ held constant. Example: a laser beam of length \(r\) at the angle \(\varphi\) en
   = \begin{pmatrix} \cos\varphi & -r\sin\varphi \\ \sin\varphi & r\cos\varphi \end{pmatrix} .
 \end{equation*}
 \(\mat J\) depends on where it is evaluated: it is the slope at one point. Near that point
-\(\vec f(\vec x) \approx \vec f(\hat{\vec x}) + \mat J\,(\vec x - \hat{\vec x})\), and the covariance is carried like
+\(\vec f(\vec x) \approx \vec f(\hat{\vec x}) + \mat J\,(\vec x - \hat{\vec x})\), and the covariance is propagated as
 with \(\mat A\): \(\mat J \mat P \mat J\T\).
 
 \begin{theory}{The extended Kalman filter (EKF)}
@@ -614,8 +613,8 @@ Three rules:
         \(\mat H\).
   \item \(\mat F\) belongs to the \emph{old} estimate \(\tilde{\vec x}^+_{n-1}\): compute it before the state is
         overwritten.
-  \item The EKF is an approximation. It is good while the uncertainty is small against the curvature of
-        \(\vec f\) (\cref{fig:banana}). A large error of the heading is such a case.
+  \item The EKF is an approximation. It holds while the uncertainty is small compared with the curvature of
+        \(\vec f\). A large heading uncertainty violates this (\cref{fig:banana}).
 \end{itemize}
 \end{theory}
 
@@ -684,7 +683,7 @@ numerical derivative of your \(\vec f\).
 
 \begin{note}
 The node predicts with every odometry message and corrects with every fix. It starts at the first fix with
-\(\theta_0 = \) \thema{theta0} and \(\sigma_{\theta 0} = \) \thema{sigma\_theta0} (0 and 0.5\,rad).
+\(\theta_0 = \) \thema{theta0} and \(\sigma_{\theta 0} = \) \thema{sigma\_theta0} (defaults 0 and 0.5\,rad).
 \end{note}
 
 \begin{enumerate}
@@ -732,9 +731,9 @@ start & 5\,s & 10\,s & 15\,s & filter in m & NEES & heading \\
 \label{sec:task4}
 \runningekf{ gps:=tunnel}
 
-ROS has an established EKF: the \thema{ekf\_node} of the package \thema{robot\_localization}, used on
-many robots. You do not program it, you configure it, in \datei{config/ekf.yaml}. Stop your node. The launch
-file of terminal 2 starts the \thema{ekf\_node} and a small node that puts its estimate on
+The standard EKF in ROS is the \thema{ekf\_node} of the package \thema{robot\_localization}. It is not
+programmed but configured, in \datei{config/ekf.yaml}. Stop your node. The launch file of terminal 2 starts the
+\thema{ekf\_node} and a bridge node that republishes its estimate on
 \thema{/muster/kf/pose}: monitor, RViz and \thema{plot\_run.py} work as before.
 
 \begin{note}

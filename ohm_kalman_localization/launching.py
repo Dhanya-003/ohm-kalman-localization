@@ -63,7 +63,7 @@ def _start(context):
     arg = lambda name: LaunchConfiguration(name).perform(context)   # noqa: E731
     simulator = paths.simulator_root()
     if arg("gps") not in CONFIGS:
-        raise ValueError(f"gps:={arg('gps')} — choose one of: {', '.join(CONFIGS)}")
+        raise ValueError(f"gps:={arg('gps')} : choose one of: {', '.join(CONFIGS)}")
     config, robot = paths.lab_file("config", arg("gps") + ".json"), arg("robot")
     forwarded = {"config": config, "robot": robot, "rviz": "false", "truth": "true", "headless": arg("headless")}
     if arg("seconds"):

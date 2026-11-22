@@ -1,7 +1,8 @@
 # ohm_kalman_localization
 
 Lab *Kalman filter* for the simulator [ir-mecanum-lab](https://github.com/christianpfitzner/ir-mecanum-lab):
-a linear Kalman filter that finds a driving robot, first from GPS alone, then from GPS and odometry.
+localization of a driving robot with a Kalman filter from GPS, then GPS and odometry, an own EKF, and
+`robot_localization` for comparison.
 Handout: `docs/kalman.pdf` (`make` in `docs/`).
 
 ## Install

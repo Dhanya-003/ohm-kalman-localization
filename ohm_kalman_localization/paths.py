@@ -1,17 +1,17 @@
-"""Where this lab and the simulator live — asked, never guessed.
+"""Where this lab and the simulator are installed.
 
 The lab is a separate repository from the simulator (`ir-mecanum-lab`, ROS package `mecanum_lab`) and
 cannot run without it: the robot, the GPS and the odometry all come from there. The
 simulator is found in this order:
 
-1. `MECANUM_LAB` — a checkout named explicitly,
+1. `MECANUM_LAB`: a checkout named explicitly,
 2. a checkout next door (`../ir-mecanum-lab` or `../mecanum-lab`), which is the layout everybody
    develops in and which wins over an install because a stale build is the commoner mistake,
 3. the installed package (`share/mecanum_lab` via `ament_index_python`, or the importable module).
 
 This lab's own files (`config/`, `rviz/`, `student/`, `nodes/`, `runs/`) are found from this file: in the checkout
-directly, after `colcon build --symlink-install` through the symlink back into the checkout — so a group
-that edits `student/kalman_filter.py` runs their edit — and in a plain install in
+directly, after `colcon build --symlink-install` through the symlink back into the checkout (so a group
+that edits `student/kalman_filter.py` runs their edit), and in a plain install in
 `share/ohm_kalman_localization`.
 """
 import os
