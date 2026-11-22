@@ -15,6 +15,12 @@ The node is given; the filter it runs is yours, in `kalman_filter.py` and `model
 The filter starts at the first fix. Results: /<robot>/kf/pose (position and its covariance),
 /<robot>/kf/twist (velocity in the world frame and its covariance), /<robot>/kf/info (the settings as
 JSON), and every 5 s one line in the terminal.
+
+Task 3 adds the service /kalman/reset (std_srvs/srv/Trigger, STUDENT 3.4 and 3.5): it drops the filter, which
+starts again at the next fix with the parameters as they are now. Change them first with ros2 param set:
+
+    ros2 param set /kalman theta0 1.5
+    ros2 service call /kalman/reset std_srvs/srv/Trigger
 """
 import json
 import math
@@ -34,6 +40,7 @@ from rclpy.executors import ExternalShutdownException         # noqa: E402
 from rclpy.node import Node                                   # noqa: E402
 from rclpy.parameter import Parameter                         # noqa: E402
 from std_msgs.msg import String                               # noqa: E402
+from std_srvs.srv import Trigger                              # noqa: E402
 
 import kalman_filter                                          # noqa: E402
 import models                                                 # noqa: E402
@@ -49,17 +56,35 @@ PARAMETERS = {
     "sigma_v0": 1.0,            # m/s: initial standard deviation of the velocity
     "rate": 10.0,               # Hz: prediction steps and reports between two fixes
 }
+FIXED = ("robot", "task", "rate")   # parameters that only take effect at the start of the node
 RESTART = 5.0                   # s: a longer step (or a step back) means the simulator was restarted
 
 
 class KalmanNode(Node):
+    """ROS node that runs the filter of kalman_filter.py on GPS and odometry and publishes the estimate.
+
+    Subscribes to /<robot>/gps_cov (tasks 1 to 3) and /<robot>/odom (tasks 2, 3); publishes /<robot>/kf/pose,
+    /<robot>/kf/twist and /<robot>/kf/info. The parameters are listed in PARAMETERS.
+
+    Attributes:
+        p: The parameters, dict name -> value.
+        task: 1 GPS only, 2 GPS and odometry, 3 EKF.
+        kf: The KalmanFilter, None until the first fix (and after a time jump).
+        t: Time of the estimate in s (simulation time).
+        u: Last odometry input (vx, vy, omega) of the EKF.
+        fixes: Number of GPS corrections so far.
+        k_gps: Gain K[0, 0] of the last GPS correction, for the report.
+        last_log: Time of the last report line in s.
+        run: Number of starts of the filter; kf/info carries it, so the monitor sees a reset as a new run.
+    """
 
     def __init__(self):
+        """Declare the parameters, subscribe to the sensors, create the publishers and the timer."""
         super().__init__("kalman", parameter_overrides=[Parameter("use_sim_time", value=True)])
         self.p = {name: self.declare_parameter(name, value).value for name, value in PARAMETERS.items()}
         robot, self.task = self.p["robot"], int(self.p["task"])
         self.kf, self.t, self.u = None, 0.0, (0.0, 0.0, 0.0)
-        self.fixes, self.k_gps, self.last_log = 0, 0.0, -1e9
+        self.fixes, self.k_gps, self.last_log, self.run = 0, 0.0, -1e9, 0
         self.create_subscription(PoseWithCovarianceStamped, f"/{robot}/gps_cov", self.on_gps, 10)
         if self.task >= 2:
             self.create_subscription(Odometry, f"/{robot}/odom", self.on_odom, 50)
@@ -67,16 +92,63 @@ class KalmanNode(Node):
         self.pub_twist = self.create_publisher(TwistWithCovarianceStamped, f"/{robot}/kf/twist", 10)
         self.pub_info = self.create_publisher(String, f"/{robot}/kf/info", 10)
         self.create_timer(1.0 / float(self.p["rate"]), self.on_timer)
+        try:
+            self.create_reset_service()
+        except NotImplementedError:
+            self.get_logger().info("no service /kalman/reset yet (STUDENT 3.4, task 3)")
         sensors = {1: "GPS", 2: "GPS + odometry", 3: "EKF, GPS + odometry"}[self.task]
         noise = f"sigma_a {self.p['sigma_a']} m/s^2" if self.task < 3 else f"sigma_w {self.p['sigma_w']} rad/s"
         self.get_logger().info(f"task {self.task} ({sensors}), {noise}"
                                + (f", sigma_v {self.p['sigma_v']} m/s" if self.task >= 2 else "")
                                + f"; waiting for the first fix on /{robot}/gps_cov")
 
+    # ------------------------------------------------------------------ parameters and reset (task 3)
+
+    def read_parameters(self) -> None:
+        """Read the current values of the parameters into self.p (robot, task and rate stay as at the start)."""
+        for name in PARAMETERS:
+            if name not in FIXED:
+                self.p[name] = self.get_parameter(name).value
+
+    def create_reset_service(self) -> None:
+        """Offer the service ~/reset, i.e. /kalman/reset, of type std_srvs/srv/Trigger (STUDENT 3.4).
+
+        Raises:
+            NotImplementedError: while STUDENT 3.4 is empty; the node then runs without the service.
+        """
+        # create the service: type Trigger, name "~/reset" (the node's own namespace), callback self.on_reset
+        # TODO STUDENT 3.4
+        raise NotImplementedError("STUDENT 3.4")
+
+    def on_reset(self, request, response):
+        """Callback of /kalman/reset: drop the filter; it starts again at the next fix (STUDENT 3.5).
+
+        Args:
+            request: std_srvs/srv/Trigger.Request, empty.
+            response: std_srvs/srv/Trigger.Response to fill: success (bool) and message (str).
+
+        Returns:
+            The filled response.
+        """
+        # read the parameters again, drop the filter (self.kf), fill the response; the return below sends it
+        # TODO STUDENT 3.5
+        raise NotImplementedError("STUDENT 3.5")
+        return response
+
     # ------------------------------------------------------------------ time
 
     def advance(self, t: float) -> bool:
-        """Predict from the filter's time to t. False if the filter had to be dropped (time jumped)."""
+        """Predict the filter from its time self.t to t.
+
+        Tasks 1 and 2 use A and Q of the constant-velocity model, task 3 the EKF with the last odometry as input.
+        A step longer than RESTART (or backwards) means the simulator was restarted: the filter is dropped.
+
+        Args:
+            t: Target time in s (simulation time).
+
+        Returns:
+            True if the filter is at t now, False if it was dropped.
+        """
         dt = t - self.t
         if dt > RESTART or dt < -RESTART:
             self.get_logger().warn(f"time jumped by {dt:.1f} s: filter dropped, waiting for the next fix")
@@ -98,6 +170,11 @@ class KalmanNode(Node):
     # ------------------------------------------------------------------ callbacks
 
     def on_gps(self, msg: PoseWithCovarianceStamped) -> None:
+        """Callback of /<robot>/gps_cov: start the filter at the first fix, later predict to the fix and correct.
+
+        Args:
+            msg: The fix, geometry_msgs/msg/PoseWithCovarianceStamped.
+        """
         t = stamp(msg)
         z, H, R = models.gps_measurement(msg)
         if self.task == 3:
@@ -108,6 +185,7 @@ class KalmanNode(Node):
             else:
                 x0, var = [z[0], z[1], 0.0, 0.0], [float(self.p["sigma_v0"]) ** 2] * 2
             self.kf, self.t = kalman_filter.KalmanFilter(x0, np.diag([R[0, 0], R[1, 1]] + var)), t
+            self.fixes, self.k_gps, self.last_log, self.run = 0, 0.0, -1e9, self.run + 1
             self.get_logger().info(f"start at the fix ({z[0]:.2f}, {z[1]:.2f}) m, t = {t:.1f} s, "
                                    f"sigma_gps {math.sqrt(R[0, 0]):.2f} m")
             self.publish()
@@ -121,6 +199,11 @@ class KalmanNode(Node):
             self.kf.x[2] = math.atan2(math.sin(self.kf.x[2]), math.cos(self.kf.x[2]))
 
     def on_odom(self, msg: Odometry) -> None:
+        """Callback of /<robot>/odom: in task 2 a correction with the velocity, in task 3 the new EKF input u.
+
+        Args:
+            msg: The odometry, nav_msgs/msg/Odometry.
+        """
         if self.task == 3:                     # EKF: the odometry is the input u, from now until the next message
             if self.kf is not None and self.advance(stamp(msg)):
                 tw = msg.twist.twist
@@ -132,6 +215,7 @@ class KalmanNode(Node):
         self.kf.correct(z, H, R)
 
     def on_timer(self) -> None:
+        """Timer, `rate` times per second: predict to now (tasks 1, 2) and publish the estimate."""
         if self.kf is None:
             return
         if self.task == 3 or self.advance(self.get_clock().now().nanoseconds * 1e-9):
@@ -140,6 +224,11 @@ class KalmanNode(Node):
     # ------------------------------------------------------------------ results
 
     def publish(self) -> None:
+        """Publish the estimate on kf/pose, kf/twist and kf/info; every 5 s one report line in the terminal.
+
+        kf/pose carries the position, the heading (task 3: estimated; tasks 1, 2: direction of the velocity)
+        and the covariance of x and y; kf/twist the velocity in the world frame.
+        """
         x, P, ekf = self.kf.x, self.kf.P, self.task == 3
         pose = PoseWithCovarianceStamped()
         pose.header.frame_id = "map"
@@ -161,7 +250,7 @@ class KalmanNode(Node):
         twist.twist.covariance = cov6(velocity_cov)
         self.pub_twist.publish(twist)
         info = {"task": self.task, "sigma_a": self.p["sigma_a"], "sigma_v": self.p["sigma_v"],
-                "fixes": self.fixes, "k_gps": self.k_gps}
+                "fixes": self.fixes, "k_gps": self.k_gps, "run": self.run}
         if ekf:
             info.update(sigma_w=self.p["sigma_w"], theta0=self.p["theta0"], sigma_theta0=self.p["sigma_theta0"])
         self.pub_info.publish(String(data=json.dumps(info)))
@@ -176,11 +265,27 @@ class KalmanNode(Node):
 
 
 def stamp(msg) -> float:
+    """Time stamp of a ROS message in s.
+
+    Args:
+        msg: Any message with a std_msgs/msg/Header in msg.header.
+
+    Returns:
+        sec + nanosec * 1e-9 of the header stamp.
+    """
     return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
 
 def cov6(block, yaw=1e-6) -> list:
-    """A 2 x 2 covariance into the 6 x 6 of ROS (x y z roll pitch yaw); z, roll, pitch tiny, yaw as given."""
+    """Expand a 2 x 2 covariance of x and y into the 6 x 6 covariance of a ROS pose (x y z roll pitch yaw).
+
+    Args:
+        block: 2 x 2 covariance of x and y (numpy array).
+        yaw: Variance of the heading in rad^2.
+
+    Returns:
+        List of 36 floats, row by row; z, roll and pitch get a tiny variance of 1e-6.
+    """
     c = [0.0] * 36
     c[0], c[1], c[6], c[7] = float(block[0, 0]), float(block[0, 1]), float(block[1, 0]), float(block[1, 1])
     c[14] = c[21] = c[28] = 1e-6
@@ -189,6 +294,7 @@ def cov6(block, yaw=1e-6) -> list:
 
 
 def main():
+    """Start ROS, spin the node until Ctrl-C or shutdown, then clean up."""
     rclpy.init()
     node = KalmanNode()
     try:

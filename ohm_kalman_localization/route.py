@@ -17,7 +17,15 @@ STOP = (9.0, 10.0)                      # middle of the left straight
 
 
 def loop(step: float = 0.05) -> list:
-    """Points (x, y, heading) every `step` metres along the loop, starting at START."""
+    """The loop as a sequence of points.
+
+    Args:
+        step: Distance between two points in m.
+
+    Returns:
+        List of (x, y, heading): position in m, direction of travel in rad, starting at START and going
+        counter-clockwise.
+    """
     (cx, cy), (w, h), r = CENTRE, SIZE, RADIUS
     x0, x1, y0, y1 = cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2
     pieces = [("line", (x0 + r, y0), (x1 - r, y0)), ("arc", (x1 - r, y0 + r), -math.pi / 2),
@@ -41,5 +49,10 @@ def loop(step: float = 0.05) -> list:
 
 
 def length() -> float:
+    """Length of the loop.
+
+    Returns:
+        Length in m: four straights and four quarter circles of RADIUS.
+    """
     (w, h), r = SIZE, RADIUS
     return 2 * (w + h) - 8 * r + 2 * math.pi * r

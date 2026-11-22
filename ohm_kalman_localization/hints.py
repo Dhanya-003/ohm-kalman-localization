@@ -22,20 +22,52 @@ WAIT = 300.0                    # s from one hint of a block to the next
 
 
 def encode(data: dict) -> str:
+    """Pack the hint texts into the format of hints.dat (zlib-compressed JSON, base64, 76 characters per line).
+
+    Args:
+        data: {"blocks": {...}, "eggs": {...}}, as tools/hints.py builds it.
+
+    Returns:
+        The text of hints.dat.
+    """
     raw = zlib.compress(json.dumps(data, ensure_ascii=False, sort_keys=True).encode("utf-8"), 9)
     return "\n".join(textwrap.wrap(base64.b64encode(raw).decode("ascii"), 76)) + "\n"
 
 
 def decode(text: str) -> dict:
+    """Unpack the text of hints.dat.
+
+    Args:
+        text: Content of hints.dat.
+
+    Returns:
+        The hint data, see encode.
+    """
     return json.loads(zlib.decompress(base64.b64decode("".join(text.split()))).decode("utf-8"))
 
 
 def load(path: str = DATA) -> dict:
+    """Read the hint texts.
+
+    Args:
+        path: Path of hints.dat.
+
+    Returns:
+        The hint data, see encode.
+    """
     with open(path, encoding="ascii") as handle:
         return decode(handle.read())
 
 
 def load_state(path: str = None) -> dict:
+    """Read which hints a group has opened, and when.
+
+    Args:
+        path: Path of the state file; None for .hints.json at the root of the repository.
+
+    Returns:
+        {block: [time of hint 1, time of hint 2, ...]}; {} if the file is missing or broken.
+    """
     try:
         with open(path or STATE, encoding="utf-8") as handle:
             return json.load(handle)
@@ -44,12 +76,26 @@ def load_state(path: str = None) -> dict:
 
 
 def save_state(seen: dict, path: str = None) -> None:
+    """Write which hints a group has opened.
+
+    Args:
+        seen: {block: [times]}, as returned by load_state.
+        path: Path of the state file; None for .hints.json at the root of the repository.
+    """
     with open(path or STATE, "w", encoding="utf-8") as handle:
         json.dump(seen, handle, indent=1, sort_keys=True)
 
 
 def untouched(block: str, root: str = ROOT) -> bool:
-    """True while a file in student/ still has the raise of the template for this block."""
+    """Whether a block is still empty in the student files.
+
+    Args:
+        block: Block id, e.g. "1.3".
+        root: Root of the repository.
+
+    Returns:
+        True while a file in student/ still has the raise NotImplementedError of the template for this block.
+    """
     folder = os.path.join(root, "student")
     mark = re.compile(r'^\s*raise NotImplementedError\("STUDENT ' + re.escape(block) + r'"\)', re.M)
     for name in sorted(os.listdir(folder)):
@@ -61,12 +107,37 @@ def untouched(block: str, root: str = ROOT) -> bool:
 
 
 def indent(text: str, by: int = 4) -> str:
+    """Indent every line of a text.
+
+    Args:
+        text: The text.
+        by: Number of spaces.
+
+    Returns:
+        The indented text.
+    """
     return textwrap.indent(text, " " * by)
 
 
 def ask(block: str, seen: dict, now: float, data: dict, root: str = ROOT, wait: float = WAIT,
         repeat: bool = False) -> str:
-    """What `hint.py <block>` prints. Opens the next hint if it may, and notes it in `seen`."""
+    """What `python3 hint.py <block>` prints; opens the next hint if allowed and notes it in seen.
+
+    A new hint opens only after a try of your own (no raise NotImplementedError left) and not within `wait`
+    seconds of the previous one.
+
+    Args:
+        block: Block id, e.g. "1.3".
+        seen: {block: [times]} of the opened hints; updated in place.
+        now: Current time in s (time.time()).
+        data: The hint data, see encode.
+        root: Root of the repository, to look into student/.
+        wait: Seconds between two hints of one block.
+        repeat: Only show the hints already opened.
+
+    Returns:
+        The text to print.
+    """
     title, levels = data["blocks"][block]["title"], data["blocks"][block]["levels"]
     times = seen.get(block, [])
     out = [f"STUDENT {block}: {title}"]
@@ -98,6 +169,15 @@ def ask(block: str, seen: dict, now: float, data: dict, root: str = ROOT, wait: 
 
 
 def overview(seen: dict, data: dict) -> str:
+    """List of all blocks with the number of hints opened.
+
+    Args:
+        seen: {block: [times]} of the opened hints.
+        data: The hint data, see encode.
+
+    Returns:
+        The text to print.
+    """
     rows = ["Hints opened so far:", ""]
     for block, entry in data["blocks"].items():
         n, total = len(seen.get(block, [])), len(entry["levels"])
@@ -108,6 +188,14 @@ def overview(seen: dict, data: dict) -> str:
 
 
 def main(argv=None) -> int:
+    """Command line of hint.py.
+
+    Args:
+        argv: Arguments without the program name; None for sys.argv.
+
+    Returns:
+        Exit code 0.
+    """
     ap = argparse.ArgumentParser(prog="hint.py", description="Hints for the STUDENT blocks, one at a time.")
     ap.add_argument("block", nargs="?", help="the block, as in # TODO STUDENT 1.3")
     ap.add_argument("-r", "--repeat", action="store_true", help="show the hints you have, open no new one")

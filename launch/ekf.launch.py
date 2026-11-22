@@ -16,4 +16,9 @@ from ohm_kalman_localization.launching import describe_ekf      # noqa: E402
 
 
 def generate_launch_description():
+    """Entry point of ros2 launch: the ekf_node of robot_localization and the bridge to kf/pose (task 4).
+
+    Returns:
+        launch.LaunchDescription, built by ohm_kalman_localization.launching.describe_ekf.
+    """
     return describe_ekf()

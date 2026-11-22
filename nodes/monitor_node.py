@@ -45,8 +45,24 @@ NEW_RUN = 2.0                   # s without /kf/pose: the next estimate is a new
 
 
 class MonitorNode(Node):
+    """ROS node that compares GPS and filter with the truth, writes each run to a CSV and draws RViz markers.
+
+    Parameters: robot (name), window (s averaged per report), period (s between reports), config (simulator
+    config with the GPS zones).
+
+    Attributes:
+        truth: Recent true poses (t, x, y, theta).
+        gps: (t, squared error) of the fixes in the current window.
+        est: (t, squared error, NEES, sigma) of the estimates in the current window.
+        heading: (t, squared heading error) of estimates with a heading of their own.
+        fixes, path: (t, x, y) of the fixes and of the estimate, for RViz.
+        pending: Estimates and fixes waiting for a newer truth sample.
+        zones: The GPS zones of the config, see load_zones.
+        inside: The zone the robot is in, with its largest error and sigma so far; None outside.
+    """
 
     def __init__(self):
+        """Declare the parameters, subscribe to truth, GPS and the filter, create publishers and timer."""
         super().__init__("monitor")
         robot = self.declare_parameter("robot", "muster").value
         self.window = self.declare_parameter("window", 30.0).value
@@ -76,6 +92,11 @@ class MonitorNode(Node):
     # ------------------------------------------------------------------ truth
 
     def on_truth(self, msg: PoseStamped) -> None:
+        """Callback of /<robot>/truth: store the true pose and evaluate the estimates that waited for it.
+
+        Args:
+            msg: The true pose, geometry_msgs/msg/PoseStamped.
+        """
         t = stamp(msg)
         if self.truth and t < self.truth[-1][0]:
             self.truth.clear()                                 # simulator restarted
@@ -85,7 +106,14 @@ class MonitorNode(Node):
             self.evaluate(*self.pending.popleft())
 
     def true_at(self, t: float):
-        """(x, y, vx, vy) of the truth at t, linear between two samples; None outside the buffer."""
+        """True state at time t, interpolated linearly between the two neighbouring samples.
+
+        Args:
+            t: Simulation time in s.
+
+        Returns:
+            (x, y, vx, vy, theta) in m, m/s and rad, or None if t is outside the buffer or in a gap > 0.5 s.
+        """
         times = [s[0] for s in self.truth]
         i = bisect.bisect_left(times, t)
         if i == 0 or i >= len(times) or times[i] - times[i - 1] > 0.5:
@@ -97,18 +125,38 @@ class MonitorNode(Node):
     # ------------------------------------------------------------------ measurements and estimates
 
     def on_gps(self, msg: PoseWithCovarianceStamped) -> None:
+        """Callback of /<robot>/gps_cov: keep the fix for RViz and evaluate it against the truth.
+
+        Args:
+            msg: The fix, geometry_msgs/msg/PoseWithCovarianceStamped.
+        """
         t, x, y = stamp(msg), msg.pose.pose.position.x, msg.pose.pose.position.y
         self.fixes.append((t, x, y))
         self.later(t, "gps", msg)
 
     def later(self, t: float, kind: str, msg, twist=None) -> None:
-        """Evaluate now if the truth at t is known, else as soon as it is."""
+        """Evaluate a fix or an estimate now if the truth at t is known, otherwise as soon as it arrives.
+
+        Args:
+            t: Time stamp of the message in s.
+            kind: "gps" or "kf".
+            msg: The fix or the estimate, geometry_msgs/msg/PoseWithCovarianceStamped.
+            twist: The latest kf/twist (estimates only) or None.
+        """
         if self.truth and t <= self.truth[-1][0]:
             self.evaluate(t, kind, msg, twist)
         else:
             self.pending.append((t, kind, msg, twist))
 
     def evaluate(self, t: float, kind: str, msg, twist) -> None:
+        """Compare one fix or estimate with the truth: error, NEES, sigma, heading; write a CSV row.
+
+        Args:
+            t: Time stamp in s.
+            kind: "gps" or "kf".
+            msg: The fix or the estimate, geometry_msgs/msg/PoseWithCovarianceStamped.
+            twist: The latest kf/twist (geometry_msgs/msg/TwistWithCovarianceStamped) or None.
+        """
         true = self.true_at(t)
         if true is None:
             return
@@ -135,17 +183,37 @@ class MonitorNode(Node):
         self.report(t)
 
     def on_twist(self, msg: TwistWithCovarianceStamped) -> None:
+        """Callback of /<robot>/kf/twist: keep the latest velocity estimate for the next CSV row.
+
+        Args:
+            msg: geometry_msgs/msg/TwistWithCovarianceStamped.
+        """
         self.twist = msg
 
     def on_info(self, msg: String) -> None:
+        """Callback of /<robot>/kf/info: store the settings of the filter and open the CSV of the run.
+
+        A new value of "run" (the filter was reset with /kalman/reset) starts a new run, as a pause would.
+
+        Args:
+            msg: std_msgs/msg/String with the settings as JSON.
+        """
         try:
-            self.info = json.loads(msg.data)
+            info = json.loads(msg.data)
         except ValueError:
             return
+        if self.info is not None and info.get("run") != self.info.get("run"):
+            self.new_run(self.last_kf)
+        self.info = info
         if self.writer is None and self.file is None:
             self.open_csv()
 
     def on_kf(self, msg: PoseWithCovarianceStamped) -> None:
+        """Callback of /<robot>/kf/pose: start a new run after a pause, keep the path, evaluate the estimate.
+
+        Args:
+            msg: The estimate, geometry_msgs/msg/PoseWithCovarianceStamped.
+        """
         t = stamp(msg)
         if abs(t - self.last_kf) > NEW_RUN:
             self.new_run(t)
@@ -156,6 +224,11 @@ class MonitorNode(Node):
     # ------------------------------------------------------------------ statistics
 
     def new_run(self, t: float) -> None:
+        """Close the CSV of the last run and clear all statistics.
+
+        Args:
+            t: Time of the first estimate of the new run in s.
+        """
         if self.file:
             self.file.close()
             self.get_logger().info(f"run written to {os.path.relpath(self.file.name)}")
@@ -165,6 +238,11 @@ class MonitorNode(Node):
         self.get_logger().info(f"new run of the filter at t = {t:.1f} s")
 
     def report(self, t: float) -> None:
+        """Print one line over the last `window` seconds, at most every `period` seconds.
+
+        Args:
+            t: Current simulation time in s.
+        """
         if t - self.last_report < self.period:
             return
         self.last_report = t
@@ -188,7 +266,14 @@ class MonitorNode(Node):
         self.get_logger().info(text)
 
     def zone_pass(self, t: float, true, error: float, sigma: float) -> None:
-        """Largest error while the truth is inside a zone, said when it leaves the zone."""
+        """Track the largest error and sigma inside a GPS zone; print them when the robot leaves the zone.
+
+        Args:
+            t: Time of the estimate in s.
+            true: True state at t, as returned by true_at.
+            error: Distance between estimate and truth in m.
+            sigma: Standard deviation the filter claims in m.
+        """
         zone = next((z for z in self.zones if inside(z, true[0], true[1])), None)
         if self.inside and (zone is None or zone["name"] != self.inside["name"]):
             z = self.inside
@@ -204,6 +289,7 @@ class MonitorNode(Node):
     # ------------------------------------------------------------------ csv
 
     def open_csv(self) -> None:
+        """Open runs/<task>_<settings>_<time>.csv; first line the settings as JSON, then the header."""
         i = self.info
         name = f"task{i.get('task', 0)}_a{i.get('sigma_a', 0)}"
         if i.get("task") == "ekf":
@@ -222,6 +308,16 @@ class MonitorNode(Node):
         self.writer.writerow(COLUMNS)
 
     def row(self, kind, t, x, y, sx, sy, sxy, vx="", vy="", svx="", svy="", true=None) -> None:
+        """Write one row to the CSV of the run (nothing if no CSV is open).
+
+        Args:
+            kind: "gps" or "kf".
+            t: Time stamp in s.
+            x, y: Position in m.
+            sx, sy, sxy: Standard deviations of x and y in m and their covariance in m^2.
+            vx, vy, svx, svy: Velocity in the world frame and its standard deviations in m/s ("" for a fix).
+            true: True state at t; its first four values (x, y, vx, vy) are written.
+        """
         if self.writer is None:
             return
         values = [kind, t, x, y, sx, sy, sxy, vx, vy, svx, svy] + list(true[:4])
@@ -230,6 +326,7 @@ class MonitorNode(Node):
     # ------------------------------------------------------------------ RViz
 
     def draw(self) -> None:
+        """Timer, twice per second: publish the true and estimated path, the fixes, the loop and the zones."""
         if not self.truth:
             return
         now = self.truth[-1][0]
@@ -260,10 +357,27 @@ class MonitorNode(Node):
 
 
 def stamp(msg) -> float:
+    """Time stamp of a ROS message in s.
+
+    Args:
+        msg: Any message with a std_msgs/msg/Header in msg.header.
+
+    Returns:
+        sec + nanosec * 1e-9 of the header stamp.
+    """
     return msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
 
 
 def make_path(samples, now: float) -> Path:
+    """Build a nav_msgs/msg/Path in the frame map from samples (every second sample is used).
+
+    Args:
+        samples: Sequence of (t, x, y).
+        now: Time stamp of the path in s.
+
+    Returns:
+        The nav_msgs/msg/Path.
+    """
     path = Path()
     path.header.frame_id = "map"
     path.header.stamp.sec, path.header.stamp.nanosec = int(now), int((now % 1.0) * 1e9)
@@ -277,6 +391,19 @@ def make_path(samples, now: float) -> Path:
 
 
 def marker(ident, ns, kind, now, rgba, size) -> Marker:
+    """Build a visualization_msgs/msg/Marker in the frame map with the common fields set.
+
+    Args:
+        ident: Marker id, unique within its namespace.
+        ns: Namespace of the marker.
+        kind: Marker type, e.g. Marker.POINTS.
+        now: Time stamp in s.
+        rgba: Colour as (r, g, b, a), each 0 .. 1.
+        size: Scale in m in x, y and z.
+
+    Returns:
+        The Marker, without points or pose.
+    """
     m = Marker()
     m.header.frame_id = "map"
     m.header.stamp.sec, m.header.stamp.nanosec = int(now), int((now % 1.0) * 1e9)
@@ -288,7 +415,14 @@ def marker(ident, ns, kind, now, rgba, size) -> Marker:
 
 
 def load_zones(config: str) -> list:
-    """The GPS zones of the simulator config the launch file started: [{name, rect, block}]."""
+    """Read the GPS zones of a simulator config.
+
+    Args:
+        config: Path of the JSON config the launch file started the simulator with; "" for none.
+
+    Returns:
+        List of dicts {"name": str, "rect": [x0, y0, x1, y1] in m, "block": True if no fix inside}.
+    """
     if not config or not os.path.isfile(config):
         return []
     with open(config, encoding="utf-8") as handle:
@@ -298,11 +432,21 @@ def load_zones(config: str) -> list:
 
 
 def inside(zone, x: float, y: float) -> bool:
+    """Whether a point lies in the rectangle of a zone.
+
+    Args:
+        zone: A zone as returned by load_zones.
+        x, y: The point in m.
+
+    Returns:
+        True if the point is inside or on the border.
+    """
     x0, y0, x1, y1 = zone["rect"]
     return min(x0, x1) <= x <= max(x0, x1) and min(y0, y1) <= y <= max(y0, y1)
 
 
 def main():
+    """Start ROS, spin the monitor until Ctrl-C or shutdown, close the CSV and clean up."""
     rclpy.init()
     node = MonitorNode()
     try:

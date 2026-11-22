@@ -11,8 +11,8 @@ sys.path.insert(0, ROOT)
 from ohm_kalman_localization import hints                                          # noqa: E402
 
 DATA = hints.load()
-BLOCK = re.compile(r"^[ \t]*# (?:>>> |TODO )STUDENT ([\dZ]+\.\d+)", re.M)
-SOLUTION = re.compile(r"^[ \t]*# >>> STUDENT ([\dZ]+\.\d+)\n(.*?)^[ \t]*# <<< STUDENT \1", re.M | re.S)
+BLOCK = re.compile(r"^[ \t]*# (?:=+ SOLUTION |TODO STUDENT )([\dZ]+\.\d+)", re.M)
+SOLUTION = re.compile(r"^[ \t]*# =+ SOLUTION ([\dZ]+\.\d+) =+\n(.*?)^[ \t]*# =+ END SOLUTION \1 =+", re.M | re.S)
 
 
 def student_texts():

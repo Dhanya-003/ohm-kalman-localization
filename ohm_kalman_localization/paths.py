@@ -22,7 +22,12 @@ SIBLINGS = ("ir-mecanum-lab", "mecanum-lab")
 
 
 def lab_root() -> str:
-    """The directory holding `config/`, `rviz/`, `student/` and `nodes/` of this lab."""
+    """Directory that holds config/, rviz/, student/ and nodes/ of this lab.
+
+    Returns:
+        The checkout (also reached through the symlinks of --symlink-install), else the share directory of the
+        installed package.
+    """
     here = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     if os.path.isdir(os.path.join(here, "config")):
         return here
@@ -34,12 +39,27 @@ def lab_root() -> str:
 
 
 def _is_simulator(directory: str) -> bool:
+    """Whether a directory is a checkout or the share directory of the simulator.
+
+    Args:
+        directory: Path to test.
+
+    Returns:
+        True if it contains mecanum_lab/engine.py or launch/lab.launch.py.
+    """
     return os.path.isfile(os.path.join(directory, "mecanum_lab", "engine.py")) or \
         os.path.isfile(os.path.join(directory, "launch", "lab.launch.py"))
 
 
 def simulator_root() -> str:
-    """The simulator's checkout or share directory; raises with the three places it looked."""
+    """Find the simulator: $MECANUM_LAB, a checkout next to this lab, or the installed package.
+
+    Returns:
+        Path of the simulator's checkout or share directory.
+
+    Raises:
+        FileNotFoundError: if none of the three places has it; the message names them.
+    """
     given = os.environ.get("MECANUM_LAB", "")
     if given and _is_simulator(given):
         return os.path.abspath(given)
@@ -59,11 +79,14 @@ def simulator_root() -> str:
 
 
 def use_simulator() -> str:
-    """Make `import mecanum_lab` import the simulator `simulator_root()` names.
+    """Make `import mecanum_lab` import the simulator that simulator_root() finds.
 
-    A checkout goes to the *front* of sys.path: a sourced workspace with an older build of the simulator
-    would otherwise win, and that build may not have the GPS zones yet.
-    An installed simulator has no module next to its share directory; then the import finds it.
+    A checkout goes to the front of sys.path: a sourced workspace with an older build of the simulator would
+    otherwise win, and that build may not have the GPS zones yet. An installed simulator has no module next
+    to its share directory; then the normal import finds it.
+
+    Returns:
+        Path of the simulator, as simulator_root().
     """
     root = simulator_root()
     if os.path.isfile(os.path.join(root, "mecanum_lab", "engine.py")) and root not in sys.path:
@@ -72,5 +95,12 @@ def use_simulator() -> str:
 
 
 def lab_file(*parts: str) -> str:
-    """Absolute path of one file of this lab, e.g. `lab_file("config", "clear.json")`."""
+    """Absolute path of a file of this lab, e.g. lab_file("config", "open.json").
+
+    Args:
+        *parts: Path components below the lab root.
+
+    Returns:
+        The joined absolute path (the file need not exist).
+    """
     return os.path.join(lab_root(), *parts)

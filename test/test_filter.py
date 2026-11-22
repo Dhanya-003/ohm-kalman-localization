@@ -2,7 +2,7 @@
 
     python3 -m pytest test/test_filter.py -q -k task1
     python3 -m pytest test/test_filter.py -q -k task2
-    python3 -m pytest test/test_filter.py -q -k task3
+    python3 -m pytest test/test_filter.py -q -k task3        (3.4 and 3.5 need a sourced ROS 2)
 """
 import math
 import os
@@ -171,3 +171,33 @@ def test_task3_the_ekf_finds_a_wrong_heading_from_gps_alone():
     assert abs(math.degrees(f.x[2] - heading)) < 3.0
     assert math.dist(f.x[:2], pose[:2]) < 0.4
 
+
+
+
+@pytest.fixture
+def node():
+    """The KalmanNode, on a ROS domain of its own so that it meets no running simulator."""
+    rclpy = pytest.importorskip("rclpy")
+    import kalman_node
+    rclpy.init(domain_id=231)
+    n = kalman_node.KalmanNode()
+    yield n
+    n.destroy_node()
+    rclpy.shutdown()
+
+
+def test_task3_4_the_node_offers_the_reset_service(node):
+    names = [node.resolve_service_name(service.srv_name) for service in node.services]
+    assert "/kalman/reset" in names, "no service /kalman/reset: STUDENT 4.4 in create_reset_service"
+
+
+def test_task3_5_reset_drops_the_filter_and_reads_the_parameters(node):
+    from rclpy.parameter import Parameter
+    from std_srvs.srv import Trigger
+    node.kf = KF.KalmanFilter([1.0, 2.0, 0.0], np.eye(3))
+    node.set_parameters([Parameter("theta0", value=1.5), Parameter("sigma_theta0", value=2.0)])
+    response = node.on_reset(Trigger.Request(), Trigger.Response())
+    assert isinstance(response, Trigger.Response), "return the response"
+    assert response.success and response.message
+    assert node.kf is None, "drop the filter: it starts again at the next fix"
+    assert node.p["theta0"] == 1.5 and node.p["sigma_theta0"] == 2.0, "read the parameters again"

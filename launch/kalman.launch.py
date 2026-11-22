@@ -17,4 +17,9 @@ from ohm_kalman_localization.launching import describe          # noqa: E402
 
 
 def generate_launch_description():
+    """Entry point of ros2 launch: simulator, driver, monitor and RViz.
+
+    Returns:
+        launch.LaunchDescription, built by ohm_kalman_localization.launching.describe.
+    """
     return describe()

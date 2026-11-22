@@ -11,9 +11,9 @@ Task 3, the EKF, state x = (x, y, theta), input u = (vx, vy, omega) of the odome
     motion_jacobian(x, u, dt)          F = df/dx at x                               task 3
     input_noise(x, dt, ...)            Q from the noise of u (given)                task 3
 
-Replace each `raise NotImplementedError("STUDENT ...")` by your code: the comment above it says in words
-what goes there, the task in the handout gives the equation, and the `return` below shows the names to
-use. The messages are ROS messages: `ros2 interface show <type>` lists their fields.
+Replace each `raise NotImplementedError("STUDENT ...")` by your code. The red box STUDENT ... in the handout
+says what is given there, what to write and which test checks it; the `return` below shows the names to use.
+The messages are ROS messages: `ros2 interface show <type>` lists their fields.
 """
 import math
 
@@ -21,18 +21,35 @@ import numpy as np
 
 
 def cv_model(dt):
-    """A of the constant-velocity model over dt seconds (4 x 4)."""
-    # the identity, plus dt where a position grows with its velocity
+    """Transition matrix A of the constant-velocity model (task 1, eq. 3.13 of the script).
+
+    The position grows by velocity times dt, the velocity stays as it is.
+
+    Args:
+        dt: Length of the time step in s.
+
+    Returns:
+        A: 4 x 4 numpy array. A @ x maps the state x = (x, y, vx, vy) at time t to the state at t + dt.
+    """
+    # A of eq. (3.13) for a step of dt seconds, 4 x 4
     # TODO STUDENT 1.1
     raise NotImplementedError("STUDENT 1.1")
     return A
 
 
 def process_noise(dt, sigma_a):
-    """Q over dt seconds: an unknown acceleration with standard deviation sigma_a (m/s^2) on each axis.
+    """Process noise Q of the constant-velocity model over one step (given).
 
-    The acceleration is constant over the step, so it moves the position by a dt^2 / 2 and the velocity by
-    a dt: Q = sigma_a^2 G G^T per axis, with G = (dt^2 / 2, dt). sigma_a = 0 is Q = 0.
+    The model keeps the velocity constant; the real robot brakes and turns. Q treats this as an unknown
+    acceleration a with standard deviation sigma_a, constant over the step. It moves the position by
+    a dt^2 / 2 and the velocity by a dt, so per axis Q = sigma_a^2 g g^T with g = (dt^2 / 2, dt).
+
+    Args:
+        dt: Length of the time step in s.
+        sigma_a: Standard deviation of the unknown acceleration in m/s^2. 0 gives Q = 0.
+
+    Returns:
+        Q: 4 x 4 numpy array, covariance added to P in every prediction. x and y are independent.
     """
     g = np.array([dt * dt / 2.0, dt])
     q = sigma_a ** 2 * np.outer(g, g)
@@ -43,34 +60,71 @@ def process_noise(dt, sigma_a):
 
 
 def gps_measurement(msg):
-    """z, H, R of one fix (geometry_msgs/msg/PoseWithCovarianceStamped on /<robot>/gps_cov)."""
-    # z: the measured position; H: picks x and y out of the state; R: the variances of x and y from the
-    # covariance of the message (6 x 6, row by row, in the order x y z roll pitch yaw)
+    """Measurement model of one GPS fix (task 1, STUDENT 1.5): measurement z, observation matrix H, noise R.
+
+    Args:
+        msg: One fix, geometry_msgs/msg/PoseWithCovarianceStamped from /<robot>/gps_cov. The position is
+            in msg.pose.pose.position, its covariance in msg.pose.covariance (6 x 6, row by row, in the
+            order x y z roll pitch yaw).
+
+    Returns:
+        A tuple (z, H, R) of numpy arrays:
+        z: the measured position (x, y) in m, 2 values.
+        H: 2 x 4 observation matrix. H @ x is the position the filter expects for the state
+            x = (x, y, vx, vy).
+        R: 2 x 2 covariance of z in m^2, the variances of x and y of the fix.
+    """
+    # z, H, R of the GPS (handout, STUDENT 1.5): z the measured position, H takes x and y out of the state,
+    # R the variances of x and y from msg.pose.covariance (6 x 6, row by row: x y z roll pitch yaw)
     # TODO STUDENT 1.5
     raise NotImplementedError("STUDENT 1.5")
     return z, H, R
 
 
 def odom_measurement(msg, sigma_v):
-    """z, H, R of one odometry message (nav_msgs/msg/Odometry on /<robot>/odom).
+    """Measurement model of one odometry message (task 2, STUDENT 2.1): z, H and R of the velocity.
 
-    The twist is the velocity in the frame of the robot (child_frame_id). The filter wants it in the world
-    frame, so it is rotated by the heading of the odometry.
+    The odometry gives the velocity in the frame of the robot (child_frame_id). The state holds the velocity
+    in the world frame, so the measurement is that velocity rotated by the heading theta of the odometry.
+
+    Args:
+        msg: One message nav_msgs/msg/Odometry from /<robot>/odom. Heading in msg.pose.pose.orientation,
+            velocity of the robot in msg.twist.twist.linear.
+        sigma_v: Standard deviation of each velocity component in m/s, the node parameter sigma_v.
+
+    Returns:
+        A tuple (z, H, R) of numpy arrays:
+        z: the velocity (vx, vy) in the world frame in m/s, 2 values.
+        H: 2 x 4 observation matrix. H @ x is the velocity the filter expects for the state
+            x = (x, y, vx, vy).
+        R: 2 x 2 covariance of z in m^2/s^2, sigma_v^2 on the diagonal.
     """
     theta = yaw(msg.pose.pose.orientation)
     vx, vy = msg.twist.twist.linear.x, msg.twist.twist.linear.y
-    # z: the velocity of the robot rotated into the world frame by theta; H: picks vx and vy out of the
-    # state; R: sigma_v squared on the diagonal
+    # z, H, R of the odometry (handout, STUDENT 2.1): z the velocity rotated into the world frame by theta,
+    # H takes vx and vy out of the state, R = sigma_v^2 I
     # TODO STUDENT 2.1
     raise NotImplementedError("STUDENT 2.1")
     return z, H, R
 
 
 def motion_model(x, u, dt):
-    """f(x, u): drive dt seconds with the velocity u of the robot, starting at x = (x, y, theta)."""
+    """Motion model f(x, u) of the EKF (task 3, STUDENT 3.1): the state after driving dt seconds.
+
+    The velocity of the robot, rotated into the world frame by theta, moves the position; omega turns theta.
+
+    Args:
+        x: State (x, y, theta) at time t: position in m, heading in rad. Any sequence of 3 numbers.
+        u: Input (vx, vy, omega) from the odometry: velocity in the frame of the robot in m/s, turn rate
+            in rad/s.
+        dt: Length of the time step in s.
+
+    Returns:
+        x_new: numpy array (x, y, theta) at time t + dt, theta wrapped to -pi .. pi.
+    """
     px, py, theta = x
     vx, vy, omega = u
-    # the velocity of the robot turned into the world frame by theta moves the position, omega turns theta
+    # x_new = f(x, u) of the handout (STUDENT 3.1), a numpy array of three numbers
     # TODO STUDENT 3.1
     raise NotImplementedError("STUDENT 3.1")
     x_new[2] = math.atan2(math.sin(x_new[2]), math.cos(x_new[2]))      # theta stays in -pi .. pi
@@ -78,20 +132,42 @@ def motion_model(x, u, dt):
 
 
 def motion_jacobian(x, u, dt):
-    """F = df/dx of motion_model at x (3 x 3): how a small change of x, y, theta changes the new state."""
+    """Jacobian F = df/dx of the motion model at x (task 3, STUDENT 3.2).
+
+    F[i, j] says how much entry i of f(x, u) changes per unit change of entry j of x. It carries the
+    covariance through the prediction: P <- F P F^T + Q.
+
+    Args:
+        x: State (x, y, theta) at which F is evaluated, the estimate before the prediction.
+        u: Input (vx, vy, omega) from the odometry, as in motion_model.
+        dt: Length of the time step in s.
+
+    Returns:
+        F: 3 x 3 numpy array.
+    """
     theta = x[2]
     vx, vy, _ = u
-    # the identity, plus the derivatives of the new x and y by theta in the third column
+    # F = df/dx of the handout (STUDENT 3.2), 3 x 3: the identity plus the derivatives by theta
     # TODO STUDENT 3.2
     raise NotImplementedError("STUDENT 3.2")
     return F
 
 
 def input_noise(x, dt, sigma_v, sigma_w):
-    """Q of one EKF step: the noise of u (sigma_v on vx and vy, sigma_w on omega) carried into the state.
+    """Process noise Q of one EKF step, from the noise of the input u (given).
 
-    Q = G M G^T with M = diag(sigma_v^2, sigma_v^2, sigma_w^2) and G = df/du, the derivative of the motion model
-    by the input. f is linear in u, so column j of G is f(x, e_j) - f(x, 0): uses your motion_model.
+    Q = G M G^T with M = diag(sigma_v^2, sigma_v^2, sigma_w^2), the covariance of u, and G = df/du, the
+    derivative of the motion model by the input. f is linear in u, so column j of G is f(x, e_j) - f(x, 0):
+    the function uses your motion_model.
+
+    Args:
+        x: State (x, y, theta) before the prediction.
+        dt: Length of the time step in s.
+        sigma_v: Standard deviation of vx and vy of the odometry in m/s.
+        sigma_w: Standard deviation of the turn rate omega in rad/s.
+
+    Returns:
+        Q: 3 x 3 numpy array, covariance added to P in the prediction.
     """
     base = motion_model(x, (0.0, 0.0, 0.0), dt)
     G = np.column_stack([motion_model(x, e, dt) - base for e in np.eye(3)])
@@ -101,5 +177,12 @@ def input_noise(x, dt, sigma_v, sigma_w):
 
 
 def yaw(q):
-    """The heading of a quaternion (geometry_msgs/msg/Quaternion) that turns only about z."""
+    """Heading of a quaternion that turns only about the z axis.
+
+    Args:
+        q: geometry_msgs/msg/Quaternion with the fields x, y, z, w.
+
+    Returns:
+        The angle about z in rad, -pi .. pi.
+    """
     return math.atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z))

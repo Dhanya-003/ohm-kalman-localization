@@ -31,7 +31,14 @@ NODE = "ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1"
 
 
 def rviz_config(robot: str) -> str:
-    """Fill the `{robot}` placeholder of the lab's RViz template; returns the generated file."""
+    """Write the RViz config of the lab for one robot.
+
+    Args:
+        robot: Robot name, replaces the placeholder {robot} in rviz/kalman.rviz.
+
+    Returns:
+        Path of the written file in /tmp.
+    """
     with open(paths.lab_file("rviz", "kalman.rviz"), encoding="utf-8") as handle:
         text = handle.read()
     target = f"/tmp/ohm_kalman_localization_{robot}.rviz"
@@ -41,7 +48,18 @@ def rviz_config(robot: str) -> str:
 
 
 def given_node(name: str, robot: str, *parameters: str) -> ExecuteProcess:
-    """One of nodes/*.py: from the checkout, or from lib/ of the install (colcon build without --symlink-install)."""
+    """Launch action for one of the given nodes in nodes/.
+
+    Runs it from the checkout, or from lib/ of the install after a colcon build without --symlink-install.
+
+    Args:
+        name: File name of the node, e.g. "route_node.py".
+        robot: Robot name, passed as the parameter robot.
+        *parameters: Further parameters as "name:=value".
+
+    Returns:
+        launch.actions.ExecuteProcess that starts the node with the Python of this launch.
+    """
     path = paths.lab_file("nodes", name)
     if not os.path.isfile(path):
         from ament_index_python.packages import get_package_prefix
@@ -53,13 +71,32 @@ def given_node(name: str, robot: str, *parameters: str) -> ExecuteProcess:
 
 
 def _after_exit(event, _context):
-    """The simulator ended (window closed, `seconds:=` reached): driver, monitor and RViz end with it."""
+    """Event handler: when the simulator ends (window closed, seconds:= reached), end the whole launch.
+
+    Args:
+        event: launch.events.process.ProcessExited of any process of the launch.
+        _context: The launch context (unused).
+
+    Returns:
+        [Shutdown] if the process was the simulator, else None.
+    """
     if event.action.name.startswith("mecanum_sim"):
         return [Shutdown(reason="the simulator ended")]
     return None
 
 
 def _start(context):
+    """Build the actions of kalman.launch.py once the launch arguments are known.
+
+    Args:
+        context: The launch context, to read the arguments.
+
+    Returns:
+        List of launch actions: simulator, driver, monitor, exit handler and (if wanted and installed) RViz.
+
+    Raises:
+        ValueError: if gps:= names no config.
+    """
     arg = lambda name: LaunchConfiguration(name).perform(context)   # noqa: E731
     simulator = paths.simulator_root()
     if arg("gps") not in CONFIGS:
@@ -93,7 +130,14 @@ EKF_ARGS = [
 
 
 def _start_ekf(context):
-    """Task 4: robot_localization's ekf_node in the namespace of the robot, and the bridge to kf/pose."""
+    """Build the actions of ekf.launch.py: robot_localization's ekf_node in the namespace of the robot and the bridge.
+
+    Args:
+        context: The launch context, to read the arguments.
+
+    Returns:
+        List of launch actions.
+    """
     from launch_ros.actions import Node
     arg = lambda name: LaunchConfiguration(name).perform(context)   # noqa: E731
     robot, params = arg("robot"), arg("params") or paths.lab_file("config", "ekf.yaml")
@@ -106,12 +150,22 @@ def _start_ekf(context):
 
 
 def describe_ekf() -> LaunchDescription:
+    """Launch description of ekf.launch.py (task 4), arguments in EKF_ARGS.
+
+    Returns:
+        launch.LaunchDescription.
+    """
     return LaunchDescription([DeclareLaunchArgument(name, default_value=default, description=text)
                               for name, default, text in EKF_ARGS]
                              + [OpaqueFunction(function=_start_ekf)])
 
 
 def describe() -> LaunchDescription:
+    """Launch description of kalman.launch.py, arguments in ARGS.
+
+    Returns:
+        launch.LaunchDescription.
+    """
     return LaunchDescription([DeclareLaunchArgument(name, default_value=default, description=text)
                               for name, default, text in ARGS]
                              + [OpaqueFunction(function=_start)])

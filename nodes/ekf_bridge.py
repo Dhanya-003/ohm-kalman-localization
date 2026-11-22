@@ -19,8 +19,16 @@ from std_msgs.msg import String
 
 
 class EkfBridge(Node):
+    """ROS node that puts the estimate of robot_localization on the topics of your filter (task 4, given).
+
+    Parameters: robot (name), params (name of the parameter file, only for kf/info and the CSV name).
+
+    Attributes:
+        params: File name of the robot_localization parameters, e.g. ekf.yaml.
+    """
 
     def __init__(self):
+        """Declare the parameters, create the publishers and subscribe to /<robot>/odometry/filtered."""
         super().__init__("ekf_bridge")
         robot = self.declare_parameter("robot", "muster").value
         self.params = os.path.basename(self.declare_parameter("params", "ekf.yaml").value)
@@ -31,6 +39,14 @@ class EkfBridge(Node):
         self.get_logger().info(f"/{robot}/odometry/filtered -> /{robot}/kf/pose, kf/twist ({self.params})")
 
     def on_odometry(self, msg: Odometry) -> None:
+        """Callback of /<robot>/odometry/filtered: republish it as kf/pose, kf/twist and kf/info.
+
+        The velocity is rotated from the frame of the robot into the world frame with the quaternion of the
+        estimate; its covariance is passed on unrotated.
+
+        Args:
+            msg: The estimate of the ekf_node, nav_msgs/msg/Odometry.
+        """
         pose = PoseWithCovarianceStamped()
         pose.header.stamp, pose.header.frame_id = msg.header.stamp, msg.header.frame_id
         pose.pose = msg.pose
@@ -47,6 +63,7 @@ class EkfBridge(Node):
 
 
 def main():
+    """Start ROS, spin the node until Ctrl-C or shutdown, then clean up."""
     rclpy.init()
     node = EkfBridge()
     try:

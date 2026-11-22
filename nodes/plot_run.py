@@ -21,7 +21,15 @@ from ohm_kalman_localization import paths                    # noqa: E402
 
 
 def load(path: str):
-    """(settings, rows of the filter, rows of the GPS) of one CSV."""
+    """Read one CSV written by the monitor.
+
+    Args:
+        path: Path of the CSV.
+
+    Returns:
+        A tuple (settings, kf, gps): the settings of the run as dict (first line of the file), and the rows of
+        the estimates and of the fixes, each a list of dicts column -> float (see monitor_node.COLUMNS).
+    """
     with open(path, encoding="utf-8") as handle:
         first = handle.readline()
         settings = json.loads(first[1:]) if first.startswith("#") else {}
@@ -35,12 +43,26 @@ def load(path: str):
 
 
 def outages(gps, start: float, end: float, gap: float = 2.0) -> list:
-    """(t0, t1) of every stretch longer than `gap` without a fix."""
+    """Find the stretches without a GPS fix.
+
+    Args:
+        gps: Rows of the fixes, as returned by load.
+        start, end: Time span of the run in s.
+        gap: Shortest stretch in s that counts.
+
+    Returns:
+        List of (t0, t1) in s.
+    """
     times = [start] + [r["t"] for r in gps] + [end]
     return [(a, b) for a, b in zip(times, times[1:]) if b - a > gap]
 
 
 def main() -> int:
+    """Command line: plot the newest run (or the one given) in three plots; optionally save it as .png.
+
+    Returns:
+        Exit code, 0 on success, 1 if there is no run or no estimate in it.
+    """
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("csv", nargs="?", help="a run from runs/ (default: the newest)")
     ap.add_argument("--save", action="store_true", help="save the figure as .png next to the .csv")

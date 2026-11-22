@@ -27,8 +27,22 @@ LEVER, RADIUS = 0.27, 0.05      # m: lx + ly and wheel radius of the simulated m
 
 
 class RouteNode(Node):
+    """ROS node that drives the robot along the loop of route.py, steered by the true pose (given).
+
+    Parameters: speed (m/s), stop (s per lap), accel (m/s^2), k_cross and k_heading (1/s, the two
+    corrections), preview (m), wheel_limit (rad/s), robot (name).
+
+    Attributes:
+        path: The loop as a list of (x, y, tangent), STEP m apart.
+        stop_index: Index of the point of path closest to route.STOP.
+        index: Index of the point of path the robot passed last.
+        wait_until: Simulation time in s until which the robot stands at the stop.
+        go: Simulation time in s at which the robot started moving the last time.
+        laps: Number of completed laps.
+    """
 
     def __init__(self):
+        """Declare the parameters, build the loop and subscribe to /<robot>/truth."""
         super().__init__("route")
         self.speed = self.declare_parameter("speed", 0.5).value            # m/s along the loop
         self.stop = self.declare_parameter("stop", 4.0).value              # s standing still per lap
@@ -47,6 +61,15 @@ class RouteNode(Node):
                                f"per lap) by /{robot}/truth")
 
     def on_truth(self, msg: PoseStamped) -> None:
+        """Callback of /<robot>/truth: compute and publish one velocity command on /<robot>/cmd_vel.
+
+        Finds the nearest point of the loop, handles the stop and the speed ramps, and steers along the tangent
+        with a sideways and a heading correction. The command is scaled down as a whole if a wheel would exceed
+        wheel_limit.
+
+        Args:
+            msg: The true pose, geometry_msgs/msg/PoseStamped.
+        """
         t = msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9
         x, y = msg.pose.position.x, msg.pose.position.y
         q = msg.pose.orientation
@@ -86,11 +109,13 @@ class RouteNode(Node):
         fastest = (abs(cmd.linear.x) + abs(cmd.linear.y) + LEVER * abs(cmd.angular.z)) / RADIUS
         if fastest > self.wheel_limit:
             scale = self.wheel_limit / fastest
-            cmd.linear.x, cmd.linear.y, cmd.angular.z = cmd.linear.x * scale, cmd.linear.y * scale, cmd.angular.z * scale
+            cmd.linear.x, cmd.linear.y = cmd.linear.x * scale, cmd.linear.y * scale
+            cmd.angular.z *= scale
         self.pub.publish(cmd)
 
 
 def main():
+    """Start ROS, spin the node until Ctrl-C or shutdown, then clean up."""
     rclpy.init()
     node = RouteNode()
     try:
