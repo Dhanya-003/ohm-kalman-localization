@@ -786,29 +786,94 @@ default made it worse here, and how would you notice that on a real robot, witho
 \newpage
 \section{Extra task: multipath}
 \label{sec:extra}
-\running{ gps:=multipath}{-p task:=2 -p sigma\_v:=0.2 -p gate:=9.21}
+\running{ gps:=multipath}{-p task:=2 -p sigma\_v:=0.2 \textrm{, then} -p gate:=9.21}
 
-\thema{gps:=multipath} adds a glass front on the right straight (\cref{fig:field}): every fix there is 2\,m
-off. Run task 2 without the gate first and note the monitor line \thema{multipath}.
+\subsection*{GPS next to a glass front}
+A GPS receiver computes its position from the travel times of the satellite signals. Next to a glass or metal
+front a signal can reach the antenna on a detour, reflected by the front: \emph{multipath}. Its travel time is too
+long, and the position is off by metres. Unlike the noise of task 0 this error does not change from fix to fix: at
+the same place every fix is off in the same direction, a \emph{bias}. The receiver does not notice it, and the
+covariance of the message still says \(\sigma = 0.5\)\,m.
 
-The innovation \(\vec\nu = \hat{\vec y} - \tilde{\vec y}\) has the covariance
-\(\mat S\) (the bracket of 3.10). Its squared Mahalanobis distance
+\thema{gps:=multipath} adds such a glass front on the right straight (amber in \cref{fig:field}): every fix there is
+2\,m off in \(x\), sideways to the direction of travel. The robot needs about 6\,s for the zone, about 30 fixes.
+The tunnel stays.
+
+\subsection*{Why the filter follows the bias}
+The Kalman filter assumes that the error of a measurement has mean zero and the covariance \(\mat R\). Independent
+errors average out over several fixes; this is why the filter of task 1 is better than a single fix. A bias does not
+average out. 30 fixes in a row pull the estimate the same way, and each one is weighted with the gain from \(\mat R\),
+as if it were correct. More fixes do not help. The filter has to recognize the wrong ones.
+
+\subsection*{Is a fix plausible?}
+Before the correction the filter predicts where the fix should be: at \(\tilde{\vec y} = \mat H \tilde{\vec x}\). The
+innovation \(\vec\nu = \hat{\vec y} - \tilde{\vec y}\) has two causes, the error of the prediction (covariance
+\(\mat H \tilde{\mat P} \mat H\T\)) and the error of the fix (\(\mat R\)). Together:
 \begin{equation*}
-  d^2 = \vec\nu\T \mat S^{-1} \vec\nu
+  \mat S = \mat H \tilde{\mat P} \mat H\T + \mat R ,
 \end{equation*}
-is larger than 9.21 for only one fix in a hundred, if the filter is right (\(\chi^2\) distribution, two degrees
-of freedom). With \thema{-p gate:=9.21} the node drops every fix above that.
+the bracket of (3.10). If the filter is right, \(\vec\nu\) is normally distributed with mean 0 and covariance \(\mat S\).
+
+In one dimension \(\nu / \sqrt{S}\) is then standard normal. A value beyond 3 occurs for 0.3\,\% of the
+measurements. A fix 2\,m off at \(\sqrt{S} = 0.5\)\,m is 4 standard deviations away and almost certainly wrong.
+
+In two dimensions the squared \emph{Mahalanobis distance} measures the innovation in units of its own standard
+deviation:
+\begin{equation*}
+  d^2 = \vec\nu\T \mat S^{-1} \vec\nu ,
+  \qquad\text{for diagonal } \mat S:\quad d^2 = \frac{\nu_x^2}{S_{xx}} + \frac{\nu_y^2}{S_{yy}} .
+\end{equation*}
+For a diagonal \(\mat S\) it is the sum of the two squared normalized innovations; in general \(\mat S^{-1}\) also
+accounts for the correlation of \(x\) and \(y\). The sum of the squares of two independent standard normal values
+follows the \(\chi^2\) distribution with two degrees of freedom. Its mean is 2, and
+\begin{equation*}
+  P\big(d^2 > c\big) = e^{-c/2} , \qquad c = 9.21:\quad e^{-4.6} = 0.01 .
+\end{equation*}
+If the filter is right, one fix in a hundred has \(d^2 > 9.21\).
+
+\paragraph{Gate.} With \thema{-p gate:=9.21} the node computes \(d^2\) of every fix before the correction and drops
+the fix if \(d^2 > 9.21\). A dropped fix is treated like a missing one in the tunnel: the filter only predicts. The
+reference of the test is the prediction. An error of the fix is detected only if it is large compared with the
+uncertainty of the prediction, \(\sqrt{\mat H \tilde{\mat P} \mat H\T}\).
 
 \begin{todo}{Z.1}
 \datei{kalman\_filter.py}, \thema{mahalanobis2(innovation, S)}: \(d^2\). \thema{correct} calls it only when
 the gate is on.
 \end{todo}
 
+\begin{enumerate}
+  \item Task 2 without the gate, two laps. The monitor prints the line \thema{multipath} after each pass. First row
+        of \cref{tab:multipath}.
+  \item Restart your node with \thema{-p gate:=9.21}, two laps. Terminal 2 prints the number of rejected fixes.
+        Second row.
+  \item The same with \thema{-p task:=1}, without and with the gate. Rows 3 and 4.
+  \item \thema{-p task:=1 -p sigma\_a:=0 -p gate:=9.21}. Watch RViz for two laps.
+\end{enumerate}
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{Multipath, two laps each. Fill in.}
+\label{tab:multipath}
+\begin{tabular}{@{}p{4.6cm}p{3.6cm}p{3.2cm}p{2.4cm}@{}}
+\toprule
+& largest error at the glass front in m & rejected fixes & filter in m \\
+\midrule
+task 2 & & --- & \\
+task 2, gate 9.21 & & & \\
+task 1 & & --- & \\
+task 1, gate 9.21 & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \begin{itemize}
-  \item How many fixes does the gate drop per lap (terminal 2)? How large is the error at the glass front now?
-  \item Try the gate with task 1 (GPS alone). Why does it help much less there?
-  \item Try \thema{task:=1}, \thema{sigma\_a:=0}, \thema{gate:=9.21}. What happens, and why does the filter not
-        recover?
+  \item Task 2: your filter has \(\sigma \approx 0.1\)\,m, the fix \(\sigma = 0.5\)\,m. Compute \(d^2\) of a fix
+        2\,m off in \(x\).
+  \item Two laps are about 500 fixes (the tunnel blocks the rest), 60 of them at the glass front. How many correct fixes should the gate drop?
+        Compare with terminal 2.
+  \item Why does the gate help much less with task 1? Look at \(\sqrt{S}\), and at the estimate after the first
+        fix in the zone that passes the gate.
+  \item With \(\sigma_a = 0\): what happens, and why does the filter not recover?
 \end{itemize}
 
 \expected[with the gate; ]{gate}
