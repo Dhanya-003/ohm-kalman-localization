@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Task 4 (given): the output of robot_localization on the topics of your filter, so the monitor compares both.
+"""Task 3 (given): the output of robot_localization on the topics of your filter, so the monitor compares both.
 
     /<robot>/odometry/filtered (nav_msgs/msg/Odometry)  ->  /<robot>/kf/pose, /<robot>/kf/twist, /<robot>/kf/info
 
@@ -19,7 +19,7 @@ from std_msgs.msg import String
 
 
 class EkfBridge(Node):
-    """ROS node that puts the estimate of robot_localization on the topics of your filter (task 4, given).
+    """ROS node that puts the estimate of robot_localization on the topics of your filter (task 3, given).
 
     Parameters: robot (name), params (name of the parameter file, only for kf/info and the CSV name).
 

@@ -1,4 +1,4 @@
-"""Lab "Kalman filter", task 4: the EKF of robot_localization instead of your node, on the same topics.
+"""Lab "Kalman filter", task 3: the EKF of robot_localization instead of your node, on the same topics.
 
     ros2 launch ohm_kalman_localization kalman.launch.py                 # terminal 1, as always
     ros2 launch ohm_kalman_localization ekf.launch.py                    # terminal 2, instead of kalman_node.py
@@ -16,7 +16,7 @@ from ohm_kalman_localization.launching import describe_ekf      # noqa: E402
 
 
 def generate_launch_description():
-    """Entry point of ros2 launch: the ekf_node of robot_localization and the bridge to kf/pose (task 4).
+    """Entry point of ros2 launch: the ekf_node of robot_localization and the bridge to kf/pose (task 3).
 
     Returns:
         launch.LaunchDescription, built by ohm_kalman_localization.launching.describe_ekf.

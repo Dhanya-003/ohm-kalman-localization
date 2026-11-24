@@ -101,7 +101,7 @@ def test_the_ekf_config_fuses_gps_position_and_odometry_velocity():
     assert (p["pose0"], p["odom0"]) == ("gps_cov", "odom")
     assert [i for i, on in enumerate(p["pose0_config"]) if on] == [0, 1]                 # x, y
     assert [i for i, on in enumerate(p["odom0_config"]) if on] == [6, 7, 11]             # vx, vy, vyaw
-    # the two lines task 4 switches on: they must parse, and the matrix must have one type (ROS 2 parameters)
+    # the two lines task 3 switches on: they must parse, and the matrix must have one type (ROS 2 parameters)
     on = text.replace("    # pose0_rejection_threshold", "    pose0_rejection_threshold") \
              .replace("    # initial_estimate_covariance:", "    initial_estimate_covariance:").replace("\n    #   ", "\n        ")
     p = yaml.safe_load(on)["/**"]["ros__parameters"]
@@ -131,3 +131,16 @@ def test_the_nodes_are_executable():
         assert os.access(path, os.X_OK), rel
         with open(path, encoding="utf-8") as handle:
             assert handle.readline().startswith("#!/usr/bin/env python3"), rel
+
+
+def test_the_template_leaves_the_solutions_out():
+    if not os.path.exists(os.path.join(ROOT, "tools", "make_template.py")):
+        pytest.skip("this is the template: tools/ stays with the solution")
+    sys.path.insert(0, os.path.join(ROOT, "tools"))
+    import make_template
+    docs = os.path.join(ROOT, "docs")
+    left_out = make_template.ignored(docs, ["kalman.tex", "kalman.pdf", "kalman_solution.pdf", "solutions"])
+    assert sorted(left_out) == ["kalman_solution.pdf", "solutions"]
+    with open(os.path.join(docs, "kalman.tex"), encoding="utf-8") as handle:
+        tex = handle.read()
+    assert "supervisor only" not in tex, "solution text belongs in docs/solutions/, not in kalman.tex"

@@ -22,10 +22,10 @@ source install/setup.bash
 | command | what |
 |---|---|
 | `ros2 launch ohm_kalman_localization kalman.launch.py` | simulator in the hall `open`, the robot drives a loop, monitor, RViz |
-| `ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1` | your filter: task 1 GPS, task 2 GPS and odometry, task 3 EKF |
-| `ros2 launch ohm_kalman_localization ekf.launch.py` | task 4: robot_localization's ekf_node with `config/ekf.yaml` instead of your node |
+| `ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1` | your filter: task 1 GPS, task 2 GPS and odometry, task 4 EKF (extra) |
+| `ros2 launch ohm_kalman_localization ekf.launch.py` | task 3: robot_localization's ekf_node with `config/ekf.yaml` instead of your node |
 | `ros2 launch ohm_kalman_localization kalman.launch.py gps:=tunnel` | no fix in the tunnel |
-| `ros2 service call /kalman/reset std_srvs/srv/Trigger` | task 3: the filter starts again at the next fix, with the parameters set by `ros2 param set /kalman ...` |
+| `ros2 service call /kalman/reset std_srvs/srv/Trigger` | task 4: the filter starts again at the next fix, with the parameters set by `ros2 param set /kalman ...` |
 | `ros2 run rqt_plot rqt_plot /muster/kf/pose/pose/covariance[0]` | live plot of a field, here P_xx |
 | `ros2 run ohm_kalman_localization plot_run.py` | plots of the newest run in `runs/` |
 | `python3 hint.py 1.3` | the next of three hints for `STUDENT 1.3`; without a block: the hints opened so far |
@@ -37,10 +37,10 @@ Your code: `student/kalman_filter.py`, `student/models.py`. Launch arguments: `g
 
 | parameter | default | |
 |---|---|---|
-| `task` | 1 | 1 GPS only · 2 GPS and odometry · 3 EKF |
+| `task` | 1 | 1 GPS only · 2 GPS and odometry · 4 EKF (task 3 is `ekf.launch.py`) |
 | `sigma_a` | 0.3 | m/s², process noise Q; 0 = Q = 0 |
-| `sigma_v` | 0.05 | m/s, noise of the odometry velocity (tasks 2, 3) |
-| `sigma_w` | 0.05 | rad/s, noise of the odometry turn rate (task 3) |
+| `sigma_v` | 0.05 | m/s, noise of the odometry velocity (tasks 2, 4) |
+| `sigma_w` | 0.05 | rad/s, noise of the odometry turn rate (task 4) |
 | `theta0`, `sigma_theta0` | 0, 0.5 | rad, initial heading of the EKF and its σ |
 | `sigma_v0`, `rate` | 1.0, 10 | initial σ of the velocity, Hz of the prediction |
 

@@ -6,10 +6,10 @@ Tasks 1 and 2, the linear filter, state x = (x, y, vx, vy) in the world frame:
     gps_measurement(msg)               z, H, R of one GPS fix                       task 1
     odom_measurement(msg, sigma_v)     z, H, R of one odometry message              task 2
 
-Task 3, the EKF, state x = (x, y, theta), input u = (vx, vy, omega) of the odometry in the frame of the robot:
-    motion_model(x, u, dt)             f(x, u): the state after dt seconds          task 3
-    motion_jacobian(x, u, dt)          F = df/dx at x                               task 3
-    input_noise(x, dt, ...)            Q from the noise of u (given)                task 3
+Task 4, the EKF, state x = (x, y, theta), input u = (vx, vy, omega) of the odometry in the frame of the robot:
+    motion_model(x, u, dt)             f(x, u): the state after dt seconds          task 4
+    motion_jacobian(x, u, dt)          F = df/dx at x                               task 4
+    input_noise(x, dt, ...)            Q from the noise of u (given)                task 4
 
 Replace each `raise NotImplementedError("STUDENT ...")` by your code. The red box STUDENT ... in the handout
 says what is given there, what to write and which test checks it; the `return` below shows the names to use.
@@ -109,7 +109,7 @@ def odom_measurement(msg, sigma_v):
 
 
 def motion_model(x, u, dt):
-    """Motion model f(x, u) of the EKF (task 3, STUDENT 3.1): the state after driving dt seconds.
+    """Motion model f(x, u) of the EKF (task 4, STUDENT 4.1): the state after driving dt seconds.
 
     The velocity of the robot, rotated into the world frame by theta, moves the position; omega turns theta.
 
@@ -124,15 +124,15 @@ def motion_model(x, u, dt):
     """
     px, py, theta = x
     vx, vy, omega = u
-    # x_new = f(x, u) of the handout (STUDENT 3.1), a numpy array of three numbers
-    # TODO STUDENT 3.1
-    raise NotImplementedError("STUDENT 3.1")
+    # x_new = f(x, u) of the handout (STUDENT 4.1), a numpy array of three numbers
+    # TODO STUDENT 4.1
+    raise NotImplementedError("STUDENT 4.1")
     x_new[2] = math.atan2(math.sin(x_new[2]), math.cos(x_new[2]))      # theta stays in -pi .. pi
     return x_new
 
 
 def motion_jacobian(x, u, dt):
-    """Jacobian F = df/dx of the motion model at x (task 3, STUDENT 3.2).
+    """Jacobian F = df/dx of the motion model at x (task 4, STUDENT 4.2).
 
     F[i, j] says how much entry i of f(x, u) changes per unit change of entry j of x. It carries the
     covariance through the prediction: P <- F P F^T + Q.
@@ -147,9 +147,9 @@ def motion_jacobian(x, u, dt):
     """
     theta = x[2]
     vx, vy, _ = u
-    # F = df/dx of the handout (STUDENT 3.2), 3 x 3: the identity plus the derivatives by theta
-    # TODO STUDENT 3.2
-    raise NotImplementedError("STUDENT 3.2")
+    # F = df/dx of the handout (STUDENT 4.2), 3 x 3: the identity plus the derivatives by theta
+    # TODO STUDENT 4.2
+    raise NotImplementedError("STUDENT 4.2")
     return F
 
 

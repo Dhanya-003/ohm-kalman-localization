@@ -4,19 +4,20 @@
     ros2 launch ohm_kalman_localization kalman.launch.py                          # terminal 1
     ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1        # terminal 2
 
-The node is given; the filter it runs is yours, in `kalman_filter.py` and `models.py` next to this file.
+The node is given, except the two blocks of task 4 (STUDENT 4.4 and 4.5, the reset service); the filter it
+runs is yours, in `kalman_filter.py` and `models.py` next to this file.
 
     task 1   GPS only:            x = (x, y, vx, vy), constant velocity; predict every 1/rate s, correct with every
                                   fix on /<robot>/gps_cov
     task 2   GPS and odometry:    task 1, plus a correction with the velocity of every /<robot>/odom
-    task 3   EKF:                 x = (x, y, theta); predict with the velocity of every /<robot>/odom as input,
+    task 4   EKF:                 x = (x, y, theta); predict with the velocity of every /<robot>/odom as input,
                                   correct with every fix
 
 The filter starts at the first fix. Results: /<robot>/kf/pose (position and its covariance),
 /<robot>/kf/twist (velocity in the world frame and its covariance), /<robot>/kf/info (the settings as
 JSON), and every 5 s one line in the terminal.
 
-Task 3 adds the service /kalman/reset (std_srvs/srv/Trigger, STUDENT 3.4 and 3.5): it drops the filter, which
+Task 4 adds the service /kalman/reset (std_srvs/srv/Trigger, STUDENT 4.4 and 4.5): it drops the filter, which
 starts again at the next fix with the parameters as they are now. Change them first with ros2 param set:
 
     ros2 param set /kalman theta0 1.5
@@ -47,11 +48,11 @@ import models                                                 # noqa: E402
 
 PARAMETERS = {
     "robot": "muster",          # topics /<robot>/gps_cov, /<robot>/odom and /<robot>/kf/...
-    "task": 1,                  # 1 GPS only, 2 GPS and odometry, 3 EKF
+    "task": 1,                  # 1 GPS only, 2 GPS and odometry, 4 EKF (task 3 is robot_localization)
     "sigma_a": 0.3,             # m/s^2: unknown acceleration in Q; 0 means Q = 0
-    "sigma_v": 0.05,            # m/s: noise of the odometry velocity, R of task 2, in Q of task 3
-    "sigma_w": 0.05,            # rad/s: noise of the odometry turn rate, in Q of task 3
-    "theta0": 0.0,              # rad: initial heading of task 3
+    "sigma_v": 0.05,            # m/s: noise of the odometry velocity, R of task 2, in Q of task 4
+    "sigma_w": 0.05,            # rad/s: noise of the odometry turn rate, in Q of task 4
+    "theta0": 0.0,              # rad: initial heading of task 4
     "sigma_theta0": 0.5,        # rad: its initial standard deviation
     "sigma_v0": 1.0,            # m/s: initial standard deviation of the velocity
     "rate": 10.0,               # Hz: prediction steps and reports between two fixes
@@ -63,12 +64,12 @@ RESTART = 5.0                   # s: a longer step (or a step back) means the si
 class KalmanNode(Node):
     """ROS node that runs the filter of kalman_filter.py on GPS and odometry and publishes the estimate.
 
-    Subscribes to /<robot>/gps_cov (tasks 1 to 3) and /<robot>/odom (tasks 2, 3); publishes /<robot>/kf/pose,
+    Subscribes to /<robot>/gps_cov (tasks 1, 2, 4) and /<robot>/odom (tasks 2, 4); publishes /<robot>/kf/pose,
     /<robot>/kf/twist and /<robot>/kf/info. The parameters are listed in PARAMETERS.
 
     Attributes:
         p: The parameters, dict name -> value.
-        task: 1 GPS only, 2 GPS and odometry, 3 EKF.
+        task: 1 GPS only, 2 GPS and odometry, 4 EKF.
         kf: The KalmanFilter, None until the first fix (and after a time jump).
         t: Time of the estimate in s (simulation time).
         u: Last odometry input (vx, vy, omega) of the EKF.
@@ -83,6 +84,9 @@ class KalmanNode(Node):
         super().__init__("kalman", parameter_overrides=[Parameter("use_sim_time", value=True)])
         self.p = {name: self.declare_parameter(name, value).value for name, value in PARAMETERS.items()}
         robot, self.task = self.p["robot"], int(self.p["task"])
+        if self.task not in (1, 2, 4):
+            raise SystemExit(f"task:={self.task}: this node runs tasks 1, 2 and 4. Task 3 is robot_localization: "
+                             "ros2 launch ohm_kalman_localization ekf.launch.py")
         self.kf, self.t, self.u = None, 0.0, (0.0, 0.0, 0.0)
         self.fixes, self.k_gps, self.last_log, self.run = 0, 0.0, -1e9, 0
         self.create_subscription(PoseWithCovarianceStamped, f"/{robot}/gps_cov", self.on_gps, 10)
@@ -95,14 +99,14 @@ class KalmanNode(Node):
         try:
             self.create_reset_service()
         except NotImplementedError:
-            self.get_logger().info("no service /kalman/reset yet (STUDENT 3.4, task 3)")
-        sensors = {1: "GPS", 2: "GPS + odometry", 3: "EKF, GPS + odometry"}[self.task]
-        noise = f"sigma_a {self.p['sigma_a']} m/s^2" if self.task < 3 else f"sigma_w {self.p['sigma_w']} rad/s"
+            self.get_logger().info("no service /kalman/reset yet (STUDENT 4.4, task 4)")
+        sensors = {1: "GPS", 2: "GPS + odometry", 4: "EKF, GPS + odometry"}[self.task]
+        noise = f"sigma_a {self.p['sigma_a']} m/s^2" if self.task != 4 else f"sigma_w {self.p['sigma_w']} rad/s"
         self.get_logger().info(f"task {self.task} ({sensors}), {noise}"
                                + (f", sigma_v {self.p['sigma_v']} m/s" if self.task >= 2 else "")
                                + f"; waiting for the first fix on /{robot}/gps_cov")
 
-    # ------------------------------------------------------------------ parameters and reset (task 3)
+    # ------------------------------------------------------------------ parameters and reset (task 4)
 
     def read_parameters(self) -> None:
         """Read the current values of the parameters into self.p (robot, task and rate stay as at the start)."""
@@ -111,17 +115,17 @@ class KalmanNode(Node):
                 self.p[name] = self.get_parameter(name).value
 
     def create_reset_service(self) -> None:
-        """Offer the service ~/reset, i.e. /kalman/reset, of type std_srvs/srv/Trigger (STUDENT 3.4).
+        """Offer the service ~/reset, i.e. /kalman/reset, of type std_srvs/srv/Trigger (STUDENT 4.4).
 
         Raises:
-            NotImplementedError: while STUDENT 3.4 is empty; the node then runs without the service.
+            NotImplementedError: while STUDENT 4.4 is empty; the node then runs without the service.
         """
         # create the service: type Trigger, name "~/reset" (the node's own namespace), callback self.on_reset
-        # TODO STUDENT 3.4
-        raise NotImplementedError("STUDENT 3.4")
+        # TODO STUDENT 4.4
+        raise NotImplementedError("STUDENT 4.4")
 
     def on_reset(self, request, response):
-        """Callback of /kalman/reset: drop the filter; it starts again at the next fix (STUDENT 3.5).
+        """Callback of /kalman/reset: drop the filter; it starts again at the next fix (STUDENT 4.5).
 
         Args:
             request: std_srvs/srv/Trigger.Request, empty.
@@ -131,8 +135,8 @@ class KalmanNode(Node):
             The filled response.
         """
         # read the parameters again, drop the filter (self.kf), fill the response; the return below sends it
-        # TODO STUDENT 3.5
-        raise NotImplementedError("STUDENT 3.5")
+        # TODO STUDENT 4.5
+        raise NotImplementedError("STUDENT 4.5")
         return response
 
     # ------------------------------------------------------------------ time
@@ -140,7 +144,7 @@ class KalmanNode(Node):
     def advance(self, t: float) -> bool:
         """Predict the filter from its time self.t to t.
 
-        Tasks 1 and 2 use A and Q of the constant-velocity model, task 3 the EKF with the last odometry as input.
+        Tasks 1 and 2 use A and Q of the constant-velocity model, task 4 the EKF with the last odometry as input.
         A step longer than RESTART (or backwards) means the simulator was restarted: the filter is dropped.
 
         Args:
@@ -154,7 +158,7 @@ class KalmanNode(Node):
             self.get_logger().warn(f"time jumped by {dt:.1f} s: filter dropped, waiting for the next fix")
             self.kf = None
             return False
-        if dt > 0.0 and self.task == 3:          # EKF: the model f with the newest odometry as input u
+        if dt > 0.0 and self.task == 4:          # EKF: the model f with the newest odometry as input u
             x = self.kf.x
             F = models.motion_jacobian(x, self.u, dt)
             Q = models.input_noise(x, dt, float(self.p["sigma_v"]), float(self.p["sigma_w"]))
@@ -177,10 +181,10 @@ class KalmanNode(Node):
         """
         t = stamp(msg)
         z, H, R = models.gps_measurement(msg)
-        if self.task == 3:
+        if self.task == 4:
             H = H[:, :3]                       # the EKF state is (x, y, theta): the columns of x and y stay
-        if self.kf is None:                    # start at the fix: velocity unknown (tasks 1, 2), heading theta0 (3)
-            if self.task == 3:
+        if self.kf is None:                    # start at the fix: velocity unknown (tasks 1, 2), heading theta0 (4)
+            if self.task == 4:
                 x0, var = [z[0], z[1], float(self.p["theta0"])], [float(self.p["sigma_theta0"]) ** 2]
             else:
                 x0, var = [z[0], z[1], 0.0, 0.0], [float(self.p["sigma_v0"]) ** 2] * 2
@@ -195,16 +199,16 @@ class KalmanNode(Node):
         self.fixes += 1
         self.kf.correct(z, H, R)
         self.k_gps = float(self.kf.K[0, 0])
-        if self.task == 3:
+        if self.task == 4:
             self.kf.x[2] = math.atan2(math.sin(self.kf.x[2]), math.cos(self.kf.x[2]))
 
     def on_odom(self, msg: Odometry) -> None:
-        """Callback of /<robot>/odom: in task 2 a correction with the velocity, in task 3 the new EKF input u.
+        """Callback of /<robot>/odom: in task 2 a correction with the velocity, in task 4 the new EKF input u.
 
         Args:
             msg: The odometry, nav_msgs/msg/Odometry.
         """
-        if self.task == 3:                     # EKF: the odometry is the input u, from now until the next message
+        if self.task == 4:                     # EKF: the odometry is the input u, from now until the next message
             if self.kf is not None and self.advance(stamp(msg)):
                 tw = msg.twist.twist
                 self.u = (tw.linear.x, tw.linear.y, tw.angular.z)
@@ -218,7 +222,7 @@ class KalmanNode(Node):
         """Timer, `rate` times per second: predict to now (tasks 1, 2) and publish the estimate."""
         if self.kf is None:
             return
-        if self.task == 3 or self.advance(self.get_clock().now().nanoseconds * 1e-9):
+        if self.task == 4 or self.advance(self.get_clock().now().nanoseconds * 1e-9):
             self.publish()                     # the EKF predicts with every odometry message, not here
 
     # ------------------------------------------------------------------ results
@@ -226,10 +230,10 @@ class KalmanNode(Node):
     def publish(self) -> None:
         """Publish the estimate on kf/pose, kf/twist and kf/info; every 5 s one report line in the terminal.
 
-        kf/pose carries the position, the heading (task 3: estimated; tasks 1, 2: direction of the velocity)
+        kf/pose carries the position, the heading (task 4: estimated; tasks 1, 2: direction of the velocity)
         and the covariance of x and y; kf/twist the velocity in the world frame.
         """
-        x, P, ekf = self.kf.x, self.kf.P, self.task == 3
+        x, P, ekf = self.kf.x, self.kf.P, self.task == 4
         pose = PoseWithCovarianceStamped()
         pose.header.frame_id = "map"
         pose.header.stamp.sec, pose.header.stamp.nanosec = int(self.t), int((self.t % 1.0) * 1e9)

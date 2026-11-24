@@ -150,7 +150,7 @@ def _start_ekf(context):
 
 
 def describe_ekf() -> LaunchDescription:
-    """Launch description of ekf.launch.py (task 4), arguments in EKF_ARGS.
+    """Launch description of ekf.launch.py (task 3), arguments in EKF_ARGS.
 
     Returns:
         launch.LaunchDescription.
