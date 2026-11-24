@@ -171,7 +171,7 @@ def input_noise(x, dt, sigma_v, sigma_w):
     """
     base = motion_model(x, (0.0, 0.0, 0.0), dt)
     G = np.column_stack([motion_model(x, e, dt) - base for e in np.eye(3)])
-    G[2] = np.arctan2(np.sin(G[2]), np.cos(G[2]))              # theta near +-pi: the difference, not the jump
+    G[2] = np.arctan2(np.sin(G[2]), np.cos(G[2]))              # wrap: a step across +-pi stays small
     M = np.diag([sigma_v ** 2, sigma_v ** 2, sigma_w ** 2])
     return G @ M @ G.T
 

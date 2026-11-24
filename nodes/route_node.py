@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """The driver of the lab (given): the robot drives the loop of route.py, lap after lap.
 
-The driver steers by the exact pose on /<robot>/truth, like a person who sees where the robot is: it drives
-along the tangent of the loop, corrects sideways back onto the loop, and turns with the curvature of the loop
-(feed-forward) plus a small correction of the heading. Your
-filter never reads /truth: it has to find the robot from GPS and odometry alone. Every lap the robot
+The driver steers by the exact pose on /<robot>/truth: it drives along the tangent of the loop, corrects
+sideways back onto the loop, and turns with the curvature of the loop (feed-forward) plus a small correction of
+the heading. Your filter never reads /truth: it finds the robot from GPS and odometry alone. Every lap the robot
 brakes on the left straight, stands for `stop` seconds and starts again, with `accel` m/s^2 both ways.
 
     ros2 run ohm_kalman_localization route_node.py --ros-args -p speed:=0.5      (the launch file starts it)
@@ -89,7 +88,7 @@ class RouteNode(Node):
             return
         if self.go is None or self.go < self.wait_until:
             self.go = max(t, self.wait_until)                              # moving off from here
-        to_stop = ((self.stop_index - nearest - 1) % n + 1) * STEP           # m, the stop just passed: a lap
+        to_stop = ((self.stop_index - nearest - 1) % n + 1) * STEP           # m to the stop; a full lap right after it
         speed = min(self.speed, max(0.05, math.sqrt(2.0 * self.accel * to_stop)),   # braking
                     0.05 + self.accel * (t - self.go))                                 # starting
         px, py, tangent = self.path[nearest]
@@ -104,7 +103,7 @@ class RouteNode(Node):
         cmd.linear.x = math.cos(theta) * vx + math.sin(theta) * vy        # into the frame of the robot
         cmd.linear.y = -math.sin(theta) * vx + math.cos(theta) * vy
         cmd.angular.z = max(-1.2, min(1.2, speed * curvature + self.k_heading * error))   # turn with the loop
-        # The simulator clips every wheel on its own, and that eats the turn first. Scale the whole command
+        # The simulator clips every wheel on its own, which cuts the turn rate first. Scale the whole command
         # instead, so that the fastest wheel stays below wheel_limit and the direction stays as it is.
         fastest = (abs(cmd.linear.x) + abs(cmd.linear.y) + LEVER * abs(cmd.angular.z)) / RADIUS
         if fastest > self.wheel_limit:

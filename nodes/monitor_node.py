@@ -9,7 +9,7 @@ Every `period` s one line over the last `window` s of simulation time:
     GPS     RMSE of the raw fixes against the true position
     filter  RMSE and largest error of /<robot>/kf/pose, and how many times better than GPS
     sigma   mean standard deviation the filter claims (sqrt of the diagonal of P)
-    NEES    mean of e^T P^-1 e / 2 over the estimates: about 1 if sigma is honest, > 1 overconfident
+    NEES    mean of e^T P^-1 e / 2 over the estimates: about 1 if sigma fits the error, > 1 if sigma is too small
     heading RMS error of the heading, for an estimate with a heading of its own (the EKF of task 4)
 
 and after every pass through a GPS zone of the config (the tunnel) its largest error and sigma. Each run of

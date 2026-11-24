@@ -29,7 +29,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.realpath(__file__))              # student/, also via the installed symlink
-for path in (HERE, os.path.dirname(HERE)):                     # your files, then the package next door
+for path in (HERE, os.path.dirname(HERE)):                     # student/ first, then the package
     if path not in sys.path:
         sys.path.insert(0, path)
 
@@ -182,7 +182,7 @@ class KalmanNode(Node):
         t = stamp(msg)
         z, H, R = models.gps_measurement(msg)
         if self.task == 4:
-            H = H[:, :3]                       # the EKF state is (x, y, theta): the columns of x and y stay
+            H = H[:, :3]                       # EKF state (x, y, theta): keep the columns of x and y
         if self.kf is None:                    # start at the fix: velocity unknown (tasks 1, 2), heading theta0 (4)
             if self.task == 4:
                 x0, var = [z[0], z[1], float(self.p["theta0"])], [float(self.p["sigma_theta0"]) ** 2]
@@ -240,10 +240,10 @@ class KalmanNode(Node):
         pose.pose.pose.position.x, pose.pose.pose.position.y = float(x[0]), float(x[1])
         if ekf:
             heading = float(x[2])
-            velocity = (models.motion_model(x, self.u, 1.0) - x)[:2]      # what f adds in 1 s: world velocity
+            velocity = (models.motion_model(x, self.u, 1.0) - x)[:2]      # f over 1 s minus x: world velocity
             velocity_cov = np.eye(2) * float(self.p["sigma_v"]) ** 2
         else:
-            heading = math.atan2(x[3], x[2])                       # the state has no heading: the course
+            heading = math.atan2(x[3], x[2])                       # no heading in the state: direction of v
             velocity, velocity_cov = x[2:4], P[2:4, 2:4]
         pose.pose.pose.orientation.z, pose.pose.pose.orientation.w = math.sin(heading / 2), math.cos(heading / 2)
         pose.pose.covariance = cov6(P[0:2, 0:2], P[2, 2] if ekf else 1e-6)

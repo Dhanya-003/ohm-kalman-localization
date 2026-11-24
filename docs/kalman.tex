@@ -258,10 +258,9 @@ ros2 run ohm_kalman_localization kalman_node.py --ros-args -p task:=1
 A block that is still empty stops the node with \thema{NotImplementedError: STUDENT 1.1}. Start the node from
 \cref{sec:task1b} on, when the blocks of task 1 are done.
 
-\paragraph{ROS documentation.} The \href{https://docs.ros.org/en/jazzy/}{ROS 2 documentation} (Jazzy, the
-version of the lab) explains every tool used here; the
-\href{https://docs.ros.org/en/jazzy/Tutorials/Beginner-CLI-Tools.html}{beginner tutorials} cover nodes, topics,
-services and parameters. Each task links the page it needs.
+\paragraph{ROS documentation.} \href{https://docs.ros.org/en/jazzy/}{ROS 2 documentation} (Jazzy, the version
+of the lab), with \href{https://docs.ros.org/en/jazzy/Tutorials/Beginner-CLI-Tools.html}{beginner tutorials} on
+nodes, topics, services and parameters. Each task links the pages it uses.
 
 \paragraph{Self check.} Tests per task, without the simulator; \thema{-k} selects the tests whose name contains
 the text, e.g. \thema{-k task1\_3} the tests of block 1.3:
@@ -559,11 +558,11 @@ velocity, as a second measurement of the same state \(\tilde{\vec x} = (x, y, v_
 \(\mat Q\), \thema{predict} and \thema{correct} stay as they are.
 
 \subsubsection*{One filter, two sensors}
-A new sensor needs no new filter equation. The correction (3.10)--(3.12) works for every measurement
-\(\hat{\vec y}\) that the filter can predict from its state as \(\tilde{\vec y} = \mat H \tilde{\vec x}\). A sensor
-is described by three things: what it measures (\(\hat{\vec y}\)), how that follows from the state (\(\mat H\)),
-and how exact it is (\(\mat R\)). With \thema{task:=2} the node calls the same \thema{correct} for both sensors,
-each time with the three of that sensor and at the rate of that sensor (\cref{fig:timeline}). Before each
+The correction (3.10)--(3.12) is the same for every sensor. It works for every measurement \(\hat{\vec y}\)
+that the filter can predict from its state as \(\tilde{\vec y} = \mat H \tilde{\vec x}\). A sensor is described by
+what it measures (\(\hat{\vec y}\)), how that follows from the state (\(\mat H\)) and how exact it is (\(\mat R\)).
+With \thema{task:=2} the node calls the same \thema{correct} for both sensors, each time with \(\hat{\vec y}\),
+\(\mat H\) and \(\mat R\) of that sensor and at its rate (\cref{fig:timeline}). Before each
 correction it predicts the filter to the time stamp of the message (\thema{on\_gps} and \thema{on\_odom} in
 \datei{kalman\_node.py}).
 
@@ -711,8 +710,8 @@ largest \(\sigma\) in the tunnel & & & \\
 /muster/kf/pose/pose/covariance[7]
 \end{lstlisting}
         These are \(P_{xx}\) and \(P_{yy}\), variances in m\(^2\), not \(\sigma\). How do they grow in the tunnel,
-        with and without odometry? Compare with the error the monitor prints after the tunnel: is \(\sigma\)
-        honest in both cases?
+        with and without odometry? Compare with the error the monitor prints after the tunnel: does \(\sigma\)
+        fit the error in both cases?
   \item What happens at the first fix after the tunnel, with GPS alone? Why does this one fix move the
         estimate so much more than the fixes before the tunnel?
 \end{itemize}
@@ -801,17 +800,14 @@ filter: the model and its Jacobian (4.1 to 4.3), a service that restarts the fil
 
 \subsection{Theory of the EKF}
 \label{sec:ekf-theory}
-The filter of task 2 takes the heading \(\theta\) from the odometry without checking it. A heading error of a
-few degrees rotates every velocity measurement, and only the GPS pulls the estimate back. An EKF
-estimates \(\theta\) itself. With \(\theta\) in the state the model is non-linear, and the Kalman filter of
-tasks 1 and 2 does not apply. This subsection derives the extended Kalman filter (EKF) from it; the questions
-at its end check that you can use it before you code.
+The filter of task 2 takes the heading \(\theta\) from the odometry. A heading error of a few degrees rotates
+every velocity measurement, and only the GPS pulls the estimate back. An EKF estimates \(\theta\) itself. With
+\(\theta\) in the state the model is non-linear, and the Kalman filter of tasks 1 and 2 does not apply as it is.
 
 \subsubsection*{Why a linear model is needed}
-The Kalman filter relies on one property: a normal distribution mapped by a linear function
-\(\vec x \mapsto \mat A \vec x\) is again a normal distribution, with mean \(\mat A \vec x\) and
-covariance \(\mat A \mat P \mat A\T\). Mean and covariance describe it completely, so the filter only has to
-carry these two.
+A normal distribution mapped by a linear function \(\vec x \mapsto \mat A \vec x\) is again a normal
+distribution, with mean \(\mat A \vec x\) and covariance \(\mat A \mat P \mat A\T\). This is why the Kalman filter
+only carries a mean and a covariance.
 
 With the heading in the state this fails. Example: the robot stands at the origin, its heading is uncertain,
 \(\theta \sim \mathcal N(0, \sigma_\theta^2)\), and it drives \(d = 3\)\,m straight ahead. It ends at
@@ -991,7 +987,7 @@ The node predicts with every odometry message and corrects with every fix. It st
 
 \subsubsection*{Restarting the filter: a ROS service}
 For the experiments below the filter has to start at a given place with a given \(\theta_0\). Restarting the
-node by hand at that moment is hard. A \emph{service} does it: a request to a node, answered by the node. A
+node by hand at that moment is hard. A \emph{service} can do it: a request to a node, answered by the node. A
 topic only sends; a service call waits for the answer
 (\href{https://docs.ros.org/en/jazzy/Tutorials/Beginner-CLI-Tools/Understanding-ROS2-Services/Understanding-ROS2-Services.html}{tutorial: understanding services},
 \href{https://docs.ros.org/en/jazzy/Tutorials/Beginner-Client-Libraries/Writing-A-Simple-Py-Service-And-Client.html}{a service in Python}). Your node will offer the service \thema{/kalman/reset}

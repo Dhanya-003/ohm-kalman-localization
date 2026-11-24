@@ -12,7 +12,7 @@ In the script the measurement z is y-hat, the predicted measurement H x is y-til
 Replace each `raise NotImplementedError("STUDENT ...")` by your code. The red box STUDENT ... in the handout
 says what is given there, what to write and which test checks it.
 
-numpy in short (the handout has a box with examples):
+numpy (examples in the handout, section 4.1):
     np.array([[1.0, 2.0], [3.0, 4.0]])     a 2 x 2 matrix, row by row; np.array([1.0, 2.0]) a vector
     A @ B, A @ x                           matrix times matrix, matrix times vector (A * B is entry by entry)
     A.T                                    the transpose

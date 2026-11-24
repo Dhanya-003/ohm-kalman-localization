@@ -57,7 +57,7 @@ class EkfBridge(Node):
         twist.header = pose.header
         twist.twist.twist.linear.x = (1.0 - 2.0 * q.z * q.z) * vx - 2.0 * q.w * q.z * vy
         twist.twist.twist.linear.y = 2.0 * q.w * q.z * vx + (1.0 - 2.0 * q.z * q.z) * vy
-        twist.twist.covariance = msg.twist.covariance       # left in the frame of the robot
+        twist.twist.covariance = msg.twist.covariance       # not rotated: stays in the frame of the robot
         self.pub_twist.publish(twist)
         self.pub_info.publish(String(data=json.dumps({"task": "ekf", "params": self.params})))
 
