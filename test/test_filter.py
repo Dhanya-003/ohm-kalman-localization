@@ -168,7 +168,7 @@ def test_task3_2_the_jacobian_is_the_derivative_of_the_motion_model(theta):
     numeric = np.column_stack([(M.motion_model(x + eps * e, u, dt) - M.motion_model(x - eps * e, u, dt)) / (2 * eps)
                                for e in np.eye(3)])
     assert M.motion_jacobian(x, u, dt) == pytest.approx(numeric, abs=1e-6), \
-        "F is not the derivative of your motion_model: compare the third column with your preparation"
+        "F is not the derivative of your motion_model: compare the third column with question 3 of the theory"
 
 
 def test_task3_3_predict_nonlinear_takes_f_and_carries_P_with_F():

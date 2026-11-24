@@ -73,8 +73,8 @@
 \newtcolorbox{theory}[1]{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmgrey},
         title={\faGraduationCap~#1}, coltitle=ohmgrey, colbacktitle=black!3,
         fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
-\newtcolorbox{prepare}{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmred},
-        title={\faHome~Preparation: answer before the lab}, coltitle=ohmred, colbacktitle=black!3,
+\newtcolorbox{questions}{base, colback=black!3, borderline west={2.5pt}{0pt}{ohmred},
+        title={\faQuestionCircle[regular]~Questions on the theory, before you code}, coltitle=ohmred, colbacktitle=black!3,
         fonttitle=\small\bfseries, toptitle=2pt, bottomtitle=0pt}
 \newtcolorbox{note}{base, colback=ohmamber!8, borderline west={2.5pt}{0pt}{ohmamber}}
 \newtcolorbox{checkpoint}{base, colback=ohmgreen!7, borderline west={2.5pt}{0pt}{ohmgreen},
@@ -140,8 +140,7 @@
 \noindent
 \begin{tabular}{@{}>{\color{ohmgrey}}l l@{\hspace{2.4em}}>{\color{ohmgrey}}l l@{}}
   \faClock[regular]~Duration & 180 minutes & \faUsers~Work in & pairs \\
-  \faBook~Script & Cycle 3, section 3.1 & \faFolderOpen[regular]~Files & \datei{ohm-kalman-localization/student/} \\
-  \faHome~At home & \multicolumn{3}{l}{theory of task 3, \cref{sec:task3-theory}, 45 min}
+  \faBook~Script & Cycle 3, section 3.1 & \faFolderOpen[regular]~Files & \datei{ohm-kalman-localization/student/}
 \end{tabular}
 
 \section{Overview}
@@ -154,10 +153,6 @@ where the robot is. The robot has two sensors:
 Task 1 uses GPS alone, task 2 GPS and the velocity of the odometry. Task 3 runs the extended Kalman filter
 (EKF) of the ROS package \thema{robot\_localization}, which estimates the heading too, and compares it with your
 filter. Task 4, for groups that are fast, is an EKF of your own.
-
-\paragraph{Preparation.} The extended Kalman filter of task 3 is not part of the lecture. Read the theory of
-task 3 at home (\cref{sec:task3-theory}, about four pages) and answer the three questions at its end. The time of
-task 3 in the lab is for the experiments with \thema{robot\_localization}.
 
 \paragraph{Linear filter, then EKF.} Tasks 1 and 2: state \(\vec x = (x, y, v_x, v_y)\T\) in the world frame,
 constant-velocity model. GPS measures \(x, y\). The odometry velocity is rotated into the world frame with the
@@ -187,7 +182,7 @@ min & section & task & done when \\
 65--95 & \ref{sec:task2a} & Task 2: odometry as measurement & \cref{tab:sigmav} is filled in \\
 95--105 & & break & \\
 105--120 & \ref{sec:task2b} & Task 2: the tunnel & \cref{tab:tunnel} is filled in \\
-120--150 & \ref{sec:task3b} & Task 3: \thema{robot\_localization} & \cref{tab:ekf} is filled in \\
+120--150 & \ref{sec:task3} & Task 3: \thema{robot\_localization} & \cref{tab:ekf} is filled in \\
 150--180 & \ref{sec:task4} & Task 4 (extra): your own EKF & if time is left \\
 \bottomrule
 \end{tabular}
@@ -731,19 +726,86 @@ Explain \cref{tab:tunnel}: what does the filter know about the motion in the tun
 \solution{task2b}
 
 \newpage
-\section{Task 3: the EKF of robot\_localization}
+\section{Task 3: the EKF of robot\_localization\minutes{30}}
 \label{sec:task3}
-An EKF estimates the heading together with the position. \Cref{sec:task3-theory} explains it; you prepare it at
-home. In \cref{sec:task3b} you run the standard EKF of ROS and compare it with your filter of task 2. Task 4, an
-EKF of your own, is the extra task for groups that are fast.
+\runningekf{ gps:=tunnel}
 
-\subsection{Theory, prepared at home}
-\label{sec:task3-theory}
+Your filter of task 2 takes the heading \(\theta\) from the odometry. An \emph{extended Kalman filter} (EKF) has
+\(\theta\) in its state and estimates it from the turn rate of the odometry and the GPS fixes. Its model is
+non-linear, because the velocity of the robot is rotated by \(\theta\); the EKF linearizes the model at the
+current estimate and otherwise runs the prediction and correction of the script. Task 4, the extra task,
+builds an EKF of your own and explains it in detail (\cref{sec:ekf-theory}).
+
+The standard EKF in ROS is the \thema{ekf\_node} of the package
+\href{https://docs.ros.org/en/rolling/p/robot_localization/}{\thema{robot\_localization}}. It is not
+programmed but configured, in \datei{config/ekf.yaml}. Stop your node. The launch file of terminal 2 starts the
+\thema{ekf\_node} and a bridge node that republishes its estimate on
+\thema{/muster/kf/pose}: monitor, RViz and \thema{plot\_run.py} work as before.
+
+\begin{note}
+The state of the \thema{ekf\_node} has 15 entries: position, orientation, velocity, angular velocity and
+acceleration in 3D. With \thema{two\_d\_mode} it stays in the plane: \(x, y, \theta\), their velocities and
+accelerations: the model of task 4 (\cref{eq:f}) with more states. \(\mat R\) of every measurement is the covariance in the
+message.
+\end{note}
+
+\begin{enumerate}
+  \item Read \datei{config/ekf.yaml}. Which entries of the GPS and of the odometry are fused? Compare with your
+        \(\mat H\) of 1.5 and 2.1. Which \(\sigma\) of the velocity does the \thema{ekf\_node} use?
+\begin{lstlisting}
+ros2 topic echo --once /muster/odom --field twist.covariance
+\end{lstlisting}
+  \item Copy your filter of task 2 from \cref{sec:task2b} into the first row of \cref{tab:ekf}; the monitor
+        lines of that run give the RMSE and the NEES.
+  \item Start terminal 2. Where does the estimate start in RViz? Run two laps and fill in the second row.
+  \item Your filter of task 2 took the heading from the odometry. Do the same here: set \thema{yaw} in
+        \thema{odom0\_config} to \thema{true}. Restart terminal 2 only. Third row.
+  \item Remove the \thema{\#} in front of \thema{pose0\_rejection\_threshold}. The \thema{ekf\_node} then
+        drops every fix whose innovation \(\vec\nu\) is more than 3 standard deviations off its prediction,
+        measured with \(\mat S = \mat H \tilde{\mat P} \mat H\T + \mat R\), the bracket of (3.10):
+        \(\vec\nu\T \mat S^{-1} \vec\nu > 3^2\). Fourth row. What happens, and why? Then remove the \thema{\#} in front of \thema{initial\_estimate\_covariance} and its 15 rows.
+        Fifth row.
+\end{enumerate}
+
+\begin{table}[ht]\centering
+\renewcommand{\arraystretch}{1.4}
+\caption{Your filter of task 2 and \thema{robot\_localization}, both with \thema{gps:=tunnel}. Fill in.}
+\label{tab:ekf}
+\begin{tabular}{@{}p{6.0cm}p{2.4cm}p{2.8cm}p{1.8cm}@{}}
+\toprule
+& filter in m & largest error in the tunnel & NEES \\
+\midrule
+your filter of task 2, \(\sigma_v = 0.2\) (\cref{sec:task2b}) & & & \\
+\datei{ekf.yaml} as given & & & \\
++ \thema{yaw} of the odometry & & & \\
++ \thema{pose0\_rejection\_threshold} & & & \\
++ \thema{initial\_estimate\_covariance} & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\expected[\datei{ekf.yaml} as given; ]{ekf}
+
+\begin{checkpoint}
+What does the \thema{ekf\_node} do that your filter of task 2 does not? What does your filter do that the
+\thema{ekf\_node} does not? Which default made it worse here, and how would you notice that on a real robot,
+without the truth?
+\end{checkpoint}
+\solution{task3}
+
+\newpage
+\section{Task 4 (extra): your own EKF}
+\label{sec:task4}
+For groups that are fast. \Cref{sec:ekf-theory} explains the EKF; \cref{sec:ekf-code} builds one into your
+filter: the model and its Jacobian (4.1 to 4.3), a service that restarts the filter (4.4, 4.5), then three runs.
+
+\subsection{Theory of the EKF}
+\label{sec:ekf-theory}
 The filter of task 2 takes the heading \(\theta\) from the odometry without checking it. A heading error of a
 few degrees rotates every velocity measurement, and only the GPS pulls the estimate back. An EKF
 estimates \(\theta\) itself. With \(\theta\) in the state the model is non-linear, and the Kalman filter of
-tasks 1 and 2 does not apply. This subsection derives the extended Kalman filter (EKF) from it. Read it before
-the lab and answer the questions at its end.
+tasks 1 and 2 does not apply. This subsection derives the extended Kalman filter (EKF) from it; the questions
+at its end check that you can use it before you code.
 
 \subsubsection*{Why a linear model is needed}
 The Kalman filter relies on one property: a normal distribution mapped by a linear function
@@ -859,7 +921,7 @@ only in \(f_2\), \(\theta\) in all three rows:
     \end{pmatrix} .
   \label{eq:F}
 \end{equation}
-The two entries \(\partial f_1/\partial\theta\) and \(\partial f_2/\partial\theta\) you derive yourself (preparation, question 3).
+The two entries \(\partial f_1/\partial\theta\) and \(\partial f_2/\partial\theta\) you derive yourself (question 3 at the end of this subsection).
 
 \paragraph{Process noise.} The model itself is exact; what is uncertain is the input. The odometry velocity has the
 standard deviation \(\sigma_v\), the turn rate \(\sigma_\omega\):
@@ -879,87 +941,22 @@ error of \(\theta\) into \(x\) and \(y\). After a few prediction steps \(\tilde{
 \(\mat K = \tilde{\mat P} \mat H\T \mat S^{-1}\) has a third row, and every innovation of \(x\) and \(y\) also corrects
 \(\theta\). It is the same mechanism as in the covariance ellipse of the script: measuring only \(x\) also sharpens \(v\).
 
-\begin{prepare}
+\begin{questions}
 \begin{enumerate}
   \item Why can the Kalman filter of tasks 1 and 2 not estimate \(\theta\)? Answer with \cref{fig:banana}.
   \item Compute \(\mat J\) of the laser example for \(r = 2\)\,m and \(\varphi = 90^\circ\), and
         \(\mat J \mat P \mat J\T\) for \(\mat P = \operatorname{diag}(0.01\,\text{m}^2,\ 0.01\,\text{rad}^2)\).
         Which standard deviation does the angle cause, and in which direction?
   \item Derive \(\partial f_1/\partial\theta\) and \(\partial f_2/\partial\theta\) of \cref{eq:f}, the two open
-        entries of \(\mat F\) in \cref{eq:F}. Task 4 codes them (4.2).
+        entries of \(\mat F\) in \cref{eq:F}. You code them in 4.2.
 \end{enumerate}
-\end{prepare}
-\solution{prep_task3}
+\end{questions}
+\solution{theory_task4}
 
 \newpage
-\subsection{The EKF of robot\_localization\minutes{30}}
-\label{sec:task3b}
-\runningekf{ gps:=tunnel}
-
-The standard EKF in ROS is the \thema{ekf\_node} of the package
-\href{https://docs.ros.org/en/rolling/p/robot_localization/}{\thema{robot\_localization}}. It is not
-programmed but configured, in \datei{config/ekf.yaml}. Stop your node. The launch file of terminal 2 starts the
-\thema{ekf\_node} and a bridge node that republishes its estimate on
-\thema{/muster/kf/pose}: monitor, RViz and \thema{plot\_run.py} work as before.
-
-\begin{note}
-The state of the \thema{ekf\_node} has 15 entries: position, orientation, velocity, angular velocity and
-acceleration in 3D. With \thema{two\_d\_mode} it stays in the plane: \(x, y, \theta\), their velocities and
-accelerations: the model of \cref{eq:f} with more states. \(\mat R\) of every measurement is the covariance in the
-message.
-\end{note}
-
-\begin{enumerate}
-  \item Read \datei{config/ekf.yaml}. Which entries of the GPS and of the odometry are fused? Compare with your
-        \(\mat H\) of 1.5 and 2.1. Which \(\sigma\) of the velocity does the \thema{ekf\_node} use?
-\begin{lstlisting}
-ros2 topic echo --once /muster/odom --field twist.covariance
-\end{lstlisting}
-  \item Copy your filter of task 2 from \cref{sec:task2b} into the first row of \cref{tab:ekf}; the monitor
-        lines of that run give the RMSE and the NEES.
-  \item Start terminal 2. Where does the estimate start in RViz? Run two laps and fill in the second row.
-  \item Your filter of task 2 took the heading from the odometry. Do the same here: set \thema{yaw} in
-        \thema{odom0\_config} to \thema{true}. Restart terminal 2 only. Third row.
-  \item Remove the \thema{\#} in front of \thema{pose0\_rejection\_threshold}. The \thema{ekf\_node} then
-        drops every fix whose innovation \(\vec\nu\) is more than 3 standard deviations off its prediction,
-        measured with \(\mat S = \mat H \tilde{\mat P} \mat H\T + \mat R\), the bracket of (3.10):
-        \(\vec\nu\T \mat S^{-1} \vec\nu > 3^2\). Fourth row. What happens, and why? Then remove the \thema{\#} in front of \thema{initial\_estimate\_covariance} and its 15 rows.
-        Fifth row.
-\end{enumerate}
-
-\begin{table}[ht]\centering
-\renewcommand{\arraystretch}{1.4}
-\caption{Your filter of task 2 and \thema{robot\_localization}, both with \thema{gps:=tunnel}. Fill in.}
-\label{tab:ekf}
-\begin{tabular}{@{}p{6.0cm}p{2.4cm}p{2.8cm}p{1.8cm}@{}}
-\toprule
-& filter in m & largest error in the tunnel & NEES \\
-\midrule
-your filter of task 2, \(\sigma_v = 0.2\) (\cref{sec:task2b}) & & & \\
-\datei{ekf.yaml} as given & & & \\
-+ \thema{yaw} of the odometry & & & \\
-+ \thema{pose0\_rejection\_threshold} & & & \\
-+ \thema{initial\_estimate\_covariance} & & & \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\expected[\datei{ekf.yaml} as given; ]{ekf}
-
-\begin{checkpoint}
-What does the \thema{ekf\_node} do that your filter of task 2 does not? What does your filter do that the
-\thema{ekf\_node} does not? Which default made it worse here, and how would you notice that on a real robot,
-without the truth?
-\end{checkpoint}
-\solution{task3}
-
-\newpage
-\section{Task 4 (extra): your own EKF\minutes{30}}
-\label{sec:task4}
+\subsection{Your EKF\minutes{30}}
+\label{sec:ekf-code}
 \running{}{-p task:=4 -p sigma\_v:=0.2}
-For groups that are fast: the EKF of \cref{sec:task3-theory} in your own filter. You code the model and its
-Jacobian (4.1 to 4.3; \(\partial f_1/\partial\theta\) and \(\partial f_2/\partial\theta\) are your answer to
-preparation question 3), a service that restarts the filter (4.4, 4.5), then three runs.
 
 \begin{todo}{4.1}
 \where{\datei{models.py}, \thema{motion\_model(x, u, dt)}}
@@ -974,7 +971,7 @@ preparation question 3), a service that restarts the filter (4.4, 4.5), then thr
 \where{\datei{models.py}, \thema{motion\_jacobian(x, u, dt)}}
 \given{\thema{theta} \(= \theta\), \thema{vx}, \thema{vy} \(= v_x^R, v_y^R\), \thema{dt} \(= \Delta t\)}
 \result{\thema{F} \(= \mat F\) of \cref{eq:F} (\(3 \times 3\)), with \(\partial f_1/\partial\theta\) and
-       \(\partial f_2/\partial\theta\) from your preparation (question 3)}
+       \(\partial f_2/\partial\theta\) from question 3 of \cref{sec:ekf-theory}}
 \test{\thema{pytest -k task4\_2} compares your \(\mat F\) with a numerical derivative of your \(\vec f\)}
 \end{todo}
 
