@@ -56,6 +56,8 @@ class KalmanFilter:
         # overwrite self.x and self.P with the prediction, eq. (3.6) and (3.8), here without B u
         # TODO STUDENT 1.2
         raise NotImplementedError("STUDENT 1.2")
+        self.x = A @ self.x
+        self.P = A @ self.P @ A.T + Q
 
     def predict_nonlinear(self, x_new, F, Q):
         """EKF prediction (task 4, STUDENT 4.3): the state through the non-linear model, the covariance through F.
@@ -70,6 +72,8 @@ class KalmanFilter:
         # overwrite self.x with x_new = f(x, u) and self.P with the EKF covariance: as in predict, F in place of A
         # TODO STUDENT 4.3
         raise NotImplementedError("STUDENT 4.3")
+        self.x = x_new
+        self.P = F @ self.P @ F.T + Q
 
     def correct(self, z, H, R):
         """Correction with one measurement, eq. (3.10) to (3.12) (STUDENT 1.4; the gain is STUDENT 1.3).
@@ -87,7 +91,9 @@ class KalmanFilter:
         # two lines: self.x with eq. (3.11), then self.P with eq. (3.12)
         # TODO STUDENT 1.4
         raise NotImplementedError("STUDENT 1.4")
-        self.K = K                                  # kept for the report of the node
+        self.K = K                                # kept for the report of the node
+        self.x = self.x + K @ innovation
+        self.P = (np.eye(self.P.shape[0]) - K @ H) @ self.P
 
 
 def kalman_gain(P, H, R):
@@ -104,4 +110,6 @@ def kalman_gain(P, H, R):
     # first S = H P H^T + R, the bracket of eq. (3.10), then K = P H^T S^-1
     # TODO STUDENT 1.3
     raise NotImplementedError("STUDENT 1.3")
+    S = H @ P @ H.T + R
+    K = P @ H.T @ np.linalg.inv(S)
     return K
