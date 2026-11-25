@@ -34,6 +34,11 @@ def cv_model(dt):
     # A of eq. (3.13) for a step of dt seconds, 4 x 4
     # TODO STUDENT 1.1
     raise NotImplementedError("STUDENT 1.1")
+    A = np.array([
+    [1.0, 0.0, dt,  0.0],
+    [0.0, 1.0, 0.0, dt ],
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],], dtype=float)
     return A
 
 
@@ -78,6 +83,11 @@ def gps_measurement(msg):
     # R the variances of x and y from msg.pose.covariance (6 x 6, row by row: x y z roll pitch yaw)
     # TODO STUDENT 1.5
     raise NotImplementedError("STUDENT 1.5")
+    z = np.array([msg.pose.pose.position.x, msg.pose.pose.position.y], dtype=float)
+    H = np.array([
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],], dtype=float)
+    R = np.diag([msg.pose.covariance[0], msg.pose.covariance[7]])
     return z, H, R
 
 
@@ -105,6 +115,12 @@ def odom_measurement(msg, sigma_v):
     # H takes vx and vy out of the state, R = sigma_v^2 I
     # TODO STUDENT 2.1
     raise NotImplementedError("STUDENT 2.1")
+    c, s = math.cos(theta), math.sin(theta)
+    z = np.array([c * vx - s * vy, s * vx + c * vy], dtype=float)
+    H = np.array([
+    [0.0, 0.0, 1.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],], dtype=float)
+    R = np.diag([sigma_v ** 2, sigma_v ** 2])
     return z, H, R
 
 
@@ -127,7 +143,12 @@ def motion_model(x, u, dt):
     # x_new = f(x, u) of the handout (STUDENT 4.1), a numpy array of three numbers
     # TODO STUDENT 4.1
     raise NotImplementedError("STUDENT 4.1")
-    x_new[2] = math.atan2(math.sin(x_new[2]), math.cos(x_new[2]))      # theta stays in -pi .. pi
+    c, s = math.cos(theta), math.sin(theta)
+    x_new = np.array([
+    px + (vx * c - vy * s) * dt,
+    py + (vx * s + vy * c) * dt,
+    theta + omega * dt,], dtype=float)
+    #x_new[2] = math.atan2(math.sin(x_new[2]), math.cos(x_new[2]))      # theta stays in -pi .. pi
     return x_new
 
 
@@ -150,6 +171,11 @@ def motion_jacobian(x, u, dt):
     # F = df/dx of the handout (STUDENT 4.2), 3 x 3: the identity plus the derivatives by theta
     # TODO STUDENT 4.2
     raise NotImplementedError("STUDENT 4.2")
+    c, s = math.cos(theta), math.sin(theta)
+    F = np.array([
+    [1.0, 0.0, (-vx * s - vy * c) * dt],
+    [0.0, 1.0, ( vx * c - vy * s) * dt],
+    [0.0, 0.0, 1.0],], dtype=float)
     return F
 
 
